@@ -143,20 +143,24 @@ class ParseRtf(object):
         :return: None -- Outputs to file
         """
         for line in rtf_list:
-            parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(line)))
-            date = self._find_date(parsed_text)
-            if date is None:
-                self._update_cache(line)
-                continue
-            elif self._cache_not_empty(self.cache):
+            if self.identify_rtf_article(line):
+                parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(line)))
+                date = self._find_date(parsed_text)
+                if date is None:
+                    self._update_cache(parsed_text)
+                    continue
+                #elif self._cache_not_empty(self.cache):
+                #TODO: Throw away all values until we find the first date
+                #TODO: Store all past values UNTIL we find a new date, then output
+                #TODO: After we reach EOF: Output whatever we have (with the most recent found date)
                 self.cache += (' ' + parsed_text)
-            try:
-                filename_o = filename+date
-            except TypeError:
-                print('halt')
-            output(self.cache, filename_o, self.output_directory)
-            self._clear_cache()
-            self.files_output[file] += 1
+                try:
+                    filename_o = filename+date
+                except TypeError:
+                    print('halt')
+                output(self.cache, filename_o, self.output_directory)
+                self._clear_cache()
+                self.files_output[file] += 1
 
 
     def parse_list(self, rtf_list, filename, file=None):
@@ -175,21 +179,7 @@ class ParseRtf(object):
         else:
             self._parse_type_2_list(rtf_list, filename, file)
 
-        for line in rtf_list:
-            parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(line)))
-            date = self._find_date(parsed_text)
-            if date is None:
-                self._update_cache(line)
-                continue
-            elif self._cache_not_empty(self.cache):
-                self.cache += (' ' +parsed_text)
-            try:
-                filename_o = filename+date
-            except TypeError:
-                print('halt')
-            output(self.cache, filename_o, self.output_directory)
-            self._clear_cache()
-            self.files_output[file] += 1
+
 
 
     def _clear_cache(self):
@@ -199,6 +189,9 @@ class ParseRtf(object):
     def _cache_not_empty(cache):
         if cache is None:
             return False
+        else:
+            return True
+
 
 
     def _update_cache(self, line):
@@ -253,7 +246,7 @@ class ParseRtf(object):
         headers = re.compile(r"\\f[2-6]")
         bold = re.compile(r"\\b[0-3]?")
         font = re.compile(r"\\fcharset0 .*?(?= |\\|;|\n);?")
-        remainder = re.compile(r"(\\).*?(?=\\| |;|\n);?")
+        remainder = re.compile(r"\\.*?(?=\\| |;|\n);?")
         rtf_text = headers.sub('',rtf_text)
         rtf_text = bold.sub('',rtf_text)
         rtf_text = font.sub('',rtf_text)
