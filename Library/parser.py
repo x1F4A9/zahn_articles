@@ -2,6 +2,27 @@ import re
 import csv
 import os
 from collections import defaultdict
+import unittest
+
+
+class test_suite(object):
+    def __init__(self):
+        pass
+
+    def scan_file(self, file_text):
+        """
+        Checks if the output file contains any rtf tag characters
+        :param file: supposedly flat text file
+        :return: Bool True/False
+        """
+        test = re.compile(r'\\|{|}')
+        if type(file_text) is list:
+            i = ' '.join(file_text)
+        if type(file_text) is str:
+            i = file_text
+        if not test.search(i):
+            return True
+
 
 class FdsDict(dict):
     """
@@ -150,6 +171,7 @@ class ParseRtf(object):
                     self._update_cache(parsed_text)
                     continue
                 #elif self._cache_not_empty(self.cache):
+
                 #TODO: Throw away all values until we find the first date
                 #TODO: Store all past values UNTIL we find a new date, then output
                 #TODO: After we reach EOF: Output whatever we have (with the most recent found date)
