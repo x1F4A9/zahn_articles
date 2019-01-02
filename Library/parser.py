@@ -2,17 +2,29 @@ import re
 import csv
 import os
 from collections import defaultdict
-import unittest
 
 
-class test_suite(object):
+def output(text, filename, path):
+    counter = 0
+    if not os.path.isdir(path):
+        os.mkdir(path)
+    initial_filename = filename
+    while os.path.isfile(os.path.join(path, filename+'.txt')):
+        filename = '{}_{}'.format(initial_filename, str(counter))
+        counter += 1
+    with open(os.path.join(path , filename+'.txt',), 'w', errors='ignore') as f:
+        f.write(text)
+
+
+class TestSuite(object):
     def __init__(self):
         pass
 
-    def scan_file(self, file_text):
+    @staticmethod
+    def scan_file(file_text):
         """
         Checks if the output file contains any rtf tag characters
-        :param file: supposedly flat text file
+        :param file_text: supposedly flat text file
         :return: Bool True/False
         """
         test = re.compile(r'\\|{|}')
@@ -40,19 +52,6 @@ class FdsDict(dict):
         return dict.get(self, item, 0)
 
 
-def output(text, filename, path):
-    counter = 0
-    if not os.path.isdir(path):
-        os.mkdir(path)
-    initial_filename = filename
-    while os.path.isfile(os.path.join(path, filename+'.txt')):
-        filename = '{}_{}'.format(initial_filename, str(counter))
-        counter += 1
-    with open(os.path.join(path , filename+'.txt',), 'w', errors='ignore') as f:
-        f.write(text)
-
-
-
 class ParseRtf(object):
     def __init__(self, output_directory = None):
         """
@@ -72,7 +71,7 @@ class ParseRtf(object):
         Main entry point for class.
         Outputs file to location specified during the construction of the parse_rtf objet
         :param rtf_text: Text snippet
-        :param filename: Filename of consolidated articles
+        :param filename: Base output filename of combined factset articles in rtf document
         :return: None -- Outputs to file
         """
         parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(rtf_text)))
@@ -88,6 +87,118 @@ class ParseRtf(object):
             output(parsed_text, filename, self.output_directory)
             self.files_output[file] += 1
 
+    def _parse_type_1_list(self, rtf_list, filename, file=None):
+        """
+        Parses a document without images
+        :param rtf_list: List of RTF text
+        :param filename: Base output filename of combined factset articles in rtf document
+        :param file: OPTIONAL -- filename of rtf document for diagnostics
+        :return: None -- Outputs to file
+        """
+        date = None
+        for line in rtf_list:
+            parsed_text = self._remove_type_1_tags(self._clean_url_field(self._create_newlines(line)))
+            #find the article date in the line
+            date_t = self._find_date(parsed_text)
+            if date_t:
+                date = date_t
+            #determine if we are at the end of the file, if not, store line in cache
+            #we should use the original line
+            if self._end_of_type_1_document(line):
+                try:
+                    filename_o = filename + date
+                except TypeError:
+                    print('halt')
+                self.cache += ('\n' + parsed_text)
+                output(self.cache, filename_o, self.output_directory)
+                self._clear_cache()
+                self.files_output[file] += 1
+            else:
+                self._update_cache(parsed_text)
+                continue
+
+    def _parse_type_2_list(self, rtf_list, filename, file=None):
+        """
+        Parses a document with images
+        :param rtf_list: List of RTF text
+        :param filename: Base output filename of combined factset articles in rtf document
+        :param file: OPTIONAL -- filename of rtf document for diagnostics
+        :return: None -- Outputs to file
+        """
+        first_run = True
+        date_l = None
+        for line in rtf_list:
+            if self.identify_rtf_article(line):
+                parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(line)))
+                date = self._find_date(parsed_text)
+                if date is None:
+                    self._update_cache(parsed_text)
+                    continue
+                if first_run:
+                    self.cache = parsed_text
+                    first_run = False
+                    date_l = date
+                    continue
+
+                try:
+                    filename_o = filename+date_l
+                except TypeError:
+                    print('halt')
+                output(self.cache, filename_o, self.output_directory)
+                self._clear_cache()
+                self.cache = parsed_text
+                self.files_output[file] += 1
+
+    def parse_list(self, rtf_list, filename, file=None):
+        """
+        Main entry point for class.
+        Parses a RTF file that is in a list format
+        Outputs file to location specified during the construction of the parse_rtf objet
+        :param rtf_list: List of RTF text
+        :param filename: Base output filename of combined factset articles in rtf document
+        :param file: OPTIONAL -- filename of rtf document for diagnostics
+        :return: None -- Outputs to file
+        """
+        #determine document type:
+        if self._document_is_type_1(rtf_list):
+            self._parse_type_1_list(rtf_list, filename, file)
+        else:
+            self._parse_type_2_list(rtf_list, filename, file)
+
+    def _clear_cache(self):
+        """
+        Sets the class variable "cache" to None.
+        :return: None
+        """
+        self.cache = None
+
+    def _update_cache(self, line):
+        """
+        Updates class variable cache. Add to the cache the text contained in the "line" variable
+        :param line: string
+        :return: None -- Updates class variable cache
+        """
+        if self.cache is None:
+            self.cache = line
+        else:
+            self.cache += (' ' + line)
+
+    def _find_date(self, rtf_text):
+        """
+        Finds the first date with the prespecified FACTSET date format
+        :param rtf_text: identified rtf text
+        :return: STRING. Converts the date to YYYYMMDD format. That is, 1 January 2000 is converted to 20000101
+        """
+        date = self.dates.search(rtf_text)
+        #check if the text snippet is an image container
+        if date is None:
+            return date
+        month = self._convert_month(date.group(2))
+        if len(date.group(1)) > 1:
+            day = date.group(1)
+        else:
+            day = '0{}'.format(date.group(1))
+        return '{}{}{}'.format(date.group(3), month, day)
 
     @staticmethod
     def _document_is_type_1(text):
@@ -119,126 +230,17 @@ class ParseRtf(object):
         else:
             return False
 
-    def _parse_type_1_list(self, rtf_list, filename, file=None):
-        """
-        Parses a document without images
-        :param rtf_list: List of RTF text
-        :param filename: Filename of consolidated articles
-        :param file: OPTIONAL -- filename for diagnostics
-        :return: None -- Outputs to file
-        """
-        date = None
-        for line in rtf_list:
-            parsed_text = self._remove_type_1_tags(self._clean_url_field(self._create_newlines(line)))
-
-            #find the article date in the line
-            date_t = self._find_date(parsed_text)
-            if date_t:
-                date = date_t
-            #determine if we are at the end of the file, if not, store line in cache
-            #we should use the original line
-            if self._end_of_type_1_document(line):
-                try:
-                    filename_o = filename + date
-                except TypeError:
-                    print('halt')
-                self.cache += ('\n' + parsed_text)
-                output(self.cache, filename_o, self.output_directory)
-                self._clear_cache()
-                self.files_output[file] += 1
-            else:
-                self._update_cache(parsed_text)
-                continue
-
-
-
-
-
-
-    def _parse_type_2_list(self, rtf_list, filename, file=None):
-        """
-        Parses a document with images
-        :param rtf_list: List of RTF text
-        :param filename: Filename of consolidated articles
-        :param file: OPTIONAL -- filename for diagnostics
-        :return: None -- Outputs to file
-        """
-        for line in rtf_list:
-            if self.identify_rtf_article(line):
-                parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(line)))
-                date = self._find_date(parsed_text)
-                if date is None:
-                    self._update_cache(parsed_text)
-                    continue
-                #elif self._cache_not_empty(self.cache):
-
-                #TODO: Throw away all values until we find the first date
-                #TODO: Store all past values UNTIL we find a new date, then output
-                #TODO: After we reach EOF: Output whatever we have (with the most recent found date)
-                self.cache += (' ' + parsed_text)
-                try:
-                    filename_o = filename+date
-                except TypeError:
-                    print('halt')
-                output(self.cache, filename_o, self.output_directory)
-                self._clear_cache()
-                self.files_output[file] += 1
-
-
-    def parse_list(self, rtf_list, filename, file=None):
-        """
-        Main entry point for class.
-        Parses a RTF file that is in a list format
-        Outputs file to location specified during the construction of the parse_rtf objet
-        :param rtf_list: List of RTF text
-        :param filename: Filename of consolidated articles
-        :param file: OPTIONAL -- filename for diagnostics
-        :return: None -- Outputs to file
-        """
-        #determine document type:
-        if self._document_is_type_1(rtf_list):
-            self._parse_type_1_list(rtf_list, filename, file)
-        else:
-            self._parse_type_2_list(rtf_list, filename, file)
-
-
-
-
-    def _clear_cache(self):
-        self.cache = None
-
     @staticmethod
     def _cache_not_empty(cache):
+        """
+        Determines if the cache is empty. Returns true if cache is empty
+        :param cache: variable that contains cache
+        :return: BOOL -- True if cache is empty
+        """
         if cache is None:
             return False
         else:
             return True
-
-
-
-    def _update_cache(self, line):
-        if self.cache is None:
-            self.cache = line
-        else:
-            self.cache += (' ' + line)
-
-    def _find_date(self, rtf_text):
-        """
-        Finds the first date with the prespecified FACTSET date format
-        :param rtf_text: identified rtf text
-        :return: STRING. Converts the date to YYYYMMDD format. That is, 1 January 2000 is converted to 20000101
-        """
-        date = self.dates.search(rtf_text)
-        #check if the text snippet is an image container
-        if date is None:
-            return date
-        month = self._convert_month(date.group(2))
-        if len(date.group(1)) > 1:
-            day = date.group(1)
-        else:
-            day = '0{}'.format(date.group(1))
-        return '{}{}{}'.format(date.group(3), month, day)
-
 
     @staticmethod
     def _convert_month(month):
@@ -264,6 +266,11 @@ class ParseRtf(object):
 
     @staticmethod
     def _remove_type_1_tags(rtf_text):
+        """
+        Removes rtf tags from "type 1" rtf documents
+        :param rtf_text: text of rtf document
+        :return: STRING with rtf tags removed
+        """
         brackets = re.compile(r"[{}]")
         headers = re.compile(r"\\f[2-6]")
         bold = re.compile(r"\\b[0-3]?")
@@ -294,7 +301,6 @@ class ParseRtf(object):
         :param rtf_text: identified rtf text
         :return: STRING with RTF tags REPLACED with empty strings
         """
-
         # remove all tags except the pars converted to newlines
         re_tag = re.compile(r"(\\.*?) ")
         re_tag_newline = re.compile(r"(\\.*?)(?=\n)")
@@ -330,10 +336,17 @@ class ParseRtf(object):
 
     @staticmethod
     def remove_images(line):
+        """
+        Removes lines that contain only bytecode. Bytecode in rtf documents does not contain a space. If the line has
+        a space, then return the line.
+        :param line: STRING -- Line to inspect
+        :return: STRING -- Returns the input value of the function if it is not bytecode.
+        """
         if ' ' not in line:
             return False
         else:
             return line
+
 
 class IdentifyFilename(object):
     def __init__(self, filenames_location):
