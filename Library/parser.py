@@ -96,11 +96,14 @@ class ParseRtf(object):
         :return: None -- Outputs to file
         """
         date = None
+        #find the first date only
+        found_date = False
         for line in rtf_list:
             parsed_text = self._remove_type_1_tags(self._clean_url_field(self._create_newlines(line)))
             #find the article date in the line
             date_t = self._find_date(parsed_text)
-            if date_t:
+            if date_t and found_date == False:
+                found_date = True
                 date = date_t
             #determine if we are at the end of the file, if not, store line in cache
             #we should use the original line
@@ -109,10 +112,12 @@ class ParseRtf(object):
                     filename_o = filename + date
                 except TypeError:
                     print('halt')
-                self.cache += ('\n' + parsed_text)
+                self.cache += (parsed_text)
                 output(self.cache, filename_o, self.output_directory)
                 self._clear_cache()
                 self.files_output[file] += 1
+                #update the date flag
+                found_date = False
             else:
                 self._update_cache(parsed_text)
                 continue
@@ -130,6 +135,7 @@ class ParseRtf(object):
         for line in rtf_list:
             if self.identify_rtf_article(line):
                 parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(line)))
+
                 date = self._find_date(parsed_text)
                 if date is None:
                     self._update_cache(parsed_text)
@@ -139,12 +145,12 @@ class ParseRtf(object):
                     first_run = False
                     date_l = date
                     continue
-
                 try:
                     filename_o = filename+date_l
                 except TypeError:
                     print('halt')
                 output(self.cache, filename_o, self.output_directory)
+                date_l = date
                 self._clear_cache()
                 self.cache = parsed_text
                 self.files_output[file] += 1
@@ -181,7 +187,7 @@ class ParseRtf(object):
         if self.cache is None:
             self.cache = line
         else:
-            self.cache += (' ' + line)
+            self.cache += (line)
 
     def _find_date(self, rtf_text):
         """

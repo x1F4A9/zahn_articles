@@ -3,13 +3,11 @@ import os
 from tqdm import tqdm
 from collections import defaultdict
 
-identified_companies_csv = os.path.join('PATH_TO_CSV_FILE_FROM_SAS7BDAT_HERE')
+identified_companies_csv = os.path.join('/home/pikakilla', 'Zahn', 'all.csv')
 identify_filenames = IdentifyFilename(identified_companies_csv)
 
-
-main_path = os.path.join('PATH_TO_RTF_FILES')
-#output folder is created automatically if it does not exist, just place a folder name here
-output_path = os.path.join('PATH_TO_OUTPUT')
+main_path = os.path.join('/home/pikakilla', 'Zahn', 'Articles')
+output_path = os.path.join('/home/pikakilla', 'Zahn', 'Output')
 files = os.listdir(main_path)
 rtf_parser = ParseRtf(output_path)
 
@@ -29,20 +27,18 @@ for file in tqdm(files):
                 text.append(line)
         rtf_parser.parse_list(text, filename, file=file)
 
+files_not_output_t = {}
 
-#DIAGNOSTIC ONLY -- WILL REMOVE
-# files_not_output_t = {}
-#
-# for key in files_read.keys():
-#     files_not_output_t[key] = rtf_parser.files_output.get(key)
-#
-# files_not_output = {}
-# for key in files_read.keys():
-#     if files_not_output_t.get(key, 0) == 0:
-#         files_not_output[key] = 0
-#
-# with open(os.path.join('DIAGNOSTIC_ONLY--WILL_REMOVE'),'w') as f:
-#     f.write(str(rtf_parser.files_output))
-#
-# with open(os.path.join('DIAGNOSTIC_ONLY--WILL_REMOVE),'w') as f:
-#     f.write(str(files_not_output))
+for key in files_read.keys():
+    files_not_output_t[key] = rtf_parser.files_output.get(key)
+
+files_not_output = {}
+for key in files_read.keys():
+    if files_not_output_t.get(key, 0) == 0:
+        files_not_output[key] = 0
+
+with open(os.path.join('/home/pikakilla/Zahn/files_output.txt'),'w') as f:
+    f.write(str(rtf_parser.files_output))
+
+with open(os.path.join('/home/pikakilla/Zahn/files_not_output.txt'),'w') as f:
+    f.write(str(files_not_output))
