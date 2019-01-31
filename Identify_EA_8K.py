@@ -13,6 +13,7 @@ from nltk.stem.wordnet import WordNetLemmatizer
 import random
 import os
 import re
+import gc
 from tqdm import tqdm
 from itertools import islice
 from collections import defaultdict
@@ -37,6 +38,7 @@ def prepare_text_for_lda(text):
     return tokens
 
 filing_path = os.path.join('E:\\','ADAMS','8-K')
+#this is the wrong way. dont do this
 good_words = ['revenue','earning','announcement','income','announce','result','results','quarter','sales','quarterly','fiscal']
 bad_words = ['forecast','expect','anticipate','foreclosure','director','resign','agreement','acquisition','acquire','incentive','IRS','examinations','distribution','call'
              'teleconference','speaker','speakers','status','extension','Catastrophe','board','repurchase','dividend'
@@ -44,32 +46,38 @@ bad_words = ['forecast','expect','anticipate','foreclosure','director','resign',
 years = os.listdir(filing_path)
 
 # for year in years:
-#     if year != '2010':
-#         continue
+#     # if year != '2010':
+#     #     continue
 #     print(year)
-#     filings = os.listdir(os.path.join(filing_path,year))
-#     counter = 0
+#     filings = os.listdir(os.path.join(filing_path, year))
 #     for filing in tqdm(filings):
+#         if random.random() > .97:
+#             with open(os.path.join(filing_path,year,filing),'r',errors='ignore') as f:
+#                 #soup = BeautifulSoup(f.read(),'lxml')
 #
-#         with open(os.path.join(filing_path,year,filing),'r',errors='ignore') as f:
-#             #soup = BeautifulSoup(f.read(),'lxml')
+#                 #filing_text_lines = filing_text.split('\n')
 #
-#             #filing_text_lines = filing_text.split('\n')
-#             if random.random() > .75:
-#                 filing_text_lines = islice(f, 200)
+#                 filing_text_lines = islice(f, 1000)
 #                 text = ''
 #                 for line in filing_text_lines:
 #                     text += ''.join(line)
 #                 soup = BeautifulSoup(text, 'lxml')
 #                 text = soup.get_text()
 #                 text_data.append(prepare_text_for_lda(text))
+#                 del soup
+#                 del text
+#                 gc.collect()
+#
 # dictionary = corpora.Dictionary(text_data)
 # corpus = [dictionary.doc2bow(text) for text in text_data]
 #
+# del text_data
+# gc.collect()
+#
 # pickle.dump(corpus, open('zahn_lda.pk1','wb'))
 # dictionary.save('dictionary.gensim')
-
-#construct model
+#
+# #construct model
 # dictionary = gensim.corpora.Dictionary.load('dictionary.gensim')
 # corpus = pickle.load(open('zahn_lda.pk1','rb'))
 # NUM_TOPICS = 5
@@ -91,7 +99,60 @@ years = os.listdir(filing_path)
 #     print(topic)
 #
 # for topic in topics_10:
+#    print(topic)
+
+
+#######################################
+#run model through year and classify each document
+#######################################
+
+dictionary = gensim.corpora.Dictionary.load('dictionary.gensim')
+ldamodel_10 = gensim.models.ldamodel.LdaModel.load('model10_zahn.gensim')
+ldamodel_5 = gensim.models.ldamodel.LdaModel.load('model5_zahn.gensim')
+corpus = pickle.load(open('zahn_lda.pk1','rb'))
+
+topics_5 = ldamodel_5.print_topics(num_words=10)
+topics_10 = ldamodel_10.print_topics(num_words=10)
+
+for topic in topics_5:
     print(topic)
+
+for topic in topics_10:
+   print(topic)
+
+
+def write(file, outpath, filename):
+    os.makedirs(outpath, exist_ok=True)
+    with open(os.path.join(outpath, filename), 'w', errors='ignore') as g:
+        g.write(file)
+
+for year in years:
+    print(year)
+    filings = os.listdir(os.path.join(filing_path, year))
+    for filing in filings:
+        with open(os.path.join(filing_path, year, filing)) as f:
+            filing_text_lines = islice(f, 1000)
+            text = ''
+            for line in filing_text_lines:
+                text += ''.join(line)
+            soup = BeautifulSoup(text, 'lxml')
+            text = soup.get_text()
+            text_data = prepare_text_for_lda(text)
+            new_text_data = dictionary.doc2bow(text_data)
+            topic_dict = {}
+            for topic, value in ldamodel_10.get_document_topics(new_text_data):
+                topic_dict[topic] = value
+
+            if max(topic_dict, key=topic_dict.get) == 3:
+                f.seek(0)
+                write(f.read(), os.path.join('C:\\', 'Zahn', 'Earnings', year), filing)
+            else:
+                f.seek(0)
+                write(f.read(), os.path.join('C:\\', 'Zahn', 'Not_Earnings', year), filing)
+
+#########################
+
+
 
 #determine topics for 8-K
 
