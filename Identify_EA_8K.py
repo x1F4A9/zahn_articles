@@ -37,14 +37,17 @@ def prepare_text_for_lda(text):
     tokens = [get_lemma(token) for token in tokens]
     return tokens
 
-filing_path = os.path.join('E:\\','ADAMS','8-K')
+#run 1 filing path
+#filing_path = os.path.join('E:\\','ADAMS','8-K')
+#run 2 filing path
+filing_path = os.path.join('C:\\''Zahn','RUN_1','Not_Earnings')
 #this is the wrong way. dont do this
 good_words = ['revenue','earning','announcement','income','announce','result','results','quarter','sales','quarterly','fiscal']
 bad_words = ['forecast','expect','anticipate','foreclosure','director','resign','agreement','acquisition','acquire','incentive','IRS','examinations','distribution','call'
              'teleconference','speaker','speakers','status','extension','Catastrophe','board','repurchase','dividend'
              'conference']
 years = os.listdir(filing_path)
-
+#
 # for year in years:
 #     # if year != '2010':
 #     #     continue
@@ -74,21 +77,21 @@ years = os.listdir(filing_path)
 # del text_data
 # gc.collect()
 #
-# pickle.dump(corpus, open('zahn_lda.pk1','wb'))
-# dictionary.save('dictionary.gensim')
-#
-# #construct model
-# dictionary = gensim.corpora.Dictionary.load('dictionary.gensim')
-# corpus = pickle.load(open('zahn_lda.pk1','rb'))
+# pickle.dump(corpus, open('zahn_lda_run_2_not_earnings.pk1','wb'))
+# dictionary.save('dictionary_run_2_not_earnings.gensim')
+
+#construct model
+# dictionary = gensim.corpora.Dictionary.load('dictionary_run_2_not_earnings.gensim')
+# corpus = pickle.load(open('zahn_lda_run_2_not_earnings.pk1','rb'))
 # NUM_TOPICS = 5
 # ldamodel_5 = gensim.models.ldamodel.LdaModel(corpus, num_topics = NUM_TOPICS,
 #                                            id2word=dictionary, passes=20)
-# ldamodel_5.save('model5_zahn.gensim')
+# ldamodel_5.save('model5_zahn_run_2_not_earnings.gensim')
 # print('model 5 saved')
 # NUM_TOPICS = 10
 # ldamodel_10 = gensim.models.ldamodel.LdaModel(corpus, num_topics = NUM_TOPICS,
 #                                            id2word=dictionary, passes=20)
-# ldamodel_10.save('model10_zahn.gensim')
+# ldamodel_10.save('model10_zahn_run_2_not_earnings.gensim')
 # print('model 10 saved')
 #
 # topics_5 = ldamodel_5.print_topics(num_words=4)
@@ -106,53 +109,84 @@ years = os.listdir(filing_path)
 #run model through year and classify each document
 #######################################
 
-dictionary = gensim.corpora.Dictionary.load('dictionary.gensim')
-ldamodel_10 = gensim.models.ldamodel.LdaModel.load('model10_zahn.gensim')
-ldamodel_5 = gensim.models.ldamodel.LdaModel.load('model5_zahn.gensim')
-corpus = pickle.load(open('zahn_lda.pk1','rb'))
-
-topics_5 = ldamodel_5.print_topics(num_words=10)
-topics_10 = ldamodel_10.print_topics(num_words=10)
-
-for topic in topics_5:
-    print(topic)
-
-for topic in topics_10:
-   print(topic)
+# dictionary = gensim.corpora.Dictionary.load('dictionary_run_2_not_earnings.gensim')
+# ldamodel_10 = gensim.models.ldamodel.LdaModel.load('model10_zahn_run_2_not_earnings.gensim')
+# ldamodel_5 = gensim.models.ldamodel.LdaModel.load('model5_zahn_run_2_not_earnings.gensim')
+# corpus = pickle.load(open('zahn_lda.pk1','rb'))
+#
+# topics_5 = ldamodel_5.print_topics(num_words=10)
+# topics_10 = ldamodel_10.print_topics(num_words=10)
+#
+# for topic in topics_5:
+#     print(topic)
+#
+# for topic in topics_10:
+#    print(topic)
 
 
 def write(file, outpath, filename):
+    file.seek(0)
     os.makedirs(outpath, exist_ok=True)
     with open(os.path.join(outpath, filename), 'w', errors='ignore') as g:
-        g.write(file)
+        g.write(file.read())
+
+# for year in years:
+#     print(year)
+#     filings = os.listdir(os.path.join(filing_path, year))
+#     for filing in filings:
+#         with open(os.path.join(filing_path, year, filing)) as f:
+#             filing_text_lines = islice(f, 1000)
+#             text = ''
+#             for line in filing_text_lines:
+#                 text += ''.join(line)
+#             soup = BeautifulSoup(text, 'lxml')
+#             text = soup.get_text()
+#             text_data = prepare_text_for_lda(text)
+#             new_text_data = dictionary.doc2bow(text_data)
+#             topic_dict = {}
+#             for topic, value in ldamodel_10.get_document_topics(new_text_data):
+#                 topic_dict[topic] = value
+#
+#             if max(topic_dict, key=topic_dict.get) == 0:
+#                 f.seek(0)
+#                 write(f.read(), os.path.join('C:\\', 'Zahn', 'RUN_2', 'Earnings', year), filing)
+#             elif max(topic_dict, key=topic_dict.get) == 2:
+#                 f.seek(0)
+#                 write(f.read(), os.path.join('C:\\', 'Zahn', 'RUN_2', 'Maybe_Earnings', year), filing)
+#             else:
+#                 f.seek(0)
+#                 write(f.read(), os.path.join('C:\\', 'Zahn', 'RUN_2', 'Not_Earnings', year), filing)
+
+#########################
+#regular expression search:
+
+expression = re.compile(r'(?:reports?|announces?) (?:first|second|third|fourth)?\s*(?:quarter|year end|annual)?\s*(?:20[0-9][0-9])?\s*(?:first|second|third|fourth)?\s*(?:quarter|year end|annual)?\s*(?:revenue|results?|earning|eps|sales)',re.I)
+expression_2 = re.compile(r'(?:reports?|announces?) (?:[0-9]{1,3}\.?[0-9]?%?)\s*(?:increase|decrease)', re.I)
 
 for year in years:
     print(year)
     filings = os.listdir(os.path.join(filing_path, year))
     for filing in filings:
         with open(os.path.join(filing_path, year, filing)) as f:
-            filing_text_lines = islice(f, 1000)
+            filing_text_lines = islice(f, 100)
             text = ''
             for line in filing_text_lines:
                 text += ''.join(line)
             soup = BeautifulSoup(text, 'lxml')
             text = soup.get_text()
-            text_data = prepare_text_for_lda(text)
-            new_text_data = dictionary.doc2bow(text_data)
-            topic_dict = {}
-            for topic, value in ldamodel_10.get_document_topics(new_text_data):
-                topic_dict[topic] = value
 
-            if max(topic_dict, key=topic_dict.get) == 3:
-                f.seek(0)
-                write(f.read(), os.path.join('C:\\', 'Zahn', 'Earnings', year), filing)
+            if expression.search(text):
+                if re.search('(?:operator|moderator|shareholder vote)', text):
+                    write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Not_Earnings', year), filing)
+                else:
+                    write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Earnings', year), filing)
+            elif expression_2.search(text):
+                if re.search('(?:operator|moderator|shareholder vote)', text):
+                    write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Not_Earnings', year), filing)
+                else:
+                    write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Earnings', year), filing)
             else:
-                f.seek(0)
-                write(f.read(), os.path.join('C:\\', 'Zahn', 'Not_Earnings', year), filing)
-
-#########################
-
-
+                write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Not_Earnings', year), filing)
 
 #determine topics for 8-K
 
