@@ -176,12 +176,12 @@ for year in years:
             text = soup.get_text()
 
             if expression.search(text):
-                if re.search('(?:operator|moderator|shareholder vote)', text):
+                if re.search('(?:operator|moderator|shareholder vote)', text, re.I):
                     write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Not_Earnings', year), filing)
                 else:
                     write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Earnings', year), filing)
             elif expression_2.search(text):
-                if re.search('(?:operator|moderator|shareholder vote)', text):
+                if re.search('(?:operator|moderator|shareholder vote)', text, re.I):
                     write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Not_Earnings', year), filing)
                 else:
                     write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Earnings', year), filing)
