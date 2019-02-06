@@ -167,7 +167,7 @@ bad_expression_2 = re.compile(r'of the(?:exchange offers|)')
 good_words = re.compile(r'financial|quarter|fiscal|earnings', re.I)
 
 def confirm_filing(text):
-    if re.search('(?:operator|moderator|shareholder|stockholder)', text, re.I):
+    if re.search('(?:operator|moderator| shareholder | stockholder | date | to announce | schedules )', text, re.I):
         return False
     if good_words.search(text):
         return True
