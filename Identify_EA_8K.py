@@ -160,13 +160,26 @@ def write(file, outpath, filename):
 #########################
 #regular expression search:
 
-expression = re.compile(r'(?:reports?|announces?) (?:first|second|third|fourth)?\s*(?:quarter|year end|annual)?\s*(?:20[0-9][0-9])?\s*(?:first|second|third|fourth)?\s*(?:quarter|year end|annual)?\s*(?:revenue|results?|earning|eps|sales)',re.I)
+expression = re.compile(r'(?:reports?|announces?) (?:first|second|third|fourth)?\s*(?:quarter|year end|annual)?\s*(?:20[0-9][0-9])?\s*(?:first|second|third|fourth)?\s*(?:quarter|year end|annual)?\s*(?:financial|revenue|results?|earning|eps|sales)',re.I)
 expression_2 = re.compile(r'(?:reports?|announces?) (?:[0-9]{1,3}\.?[0-9]?%?)\s*(?:increase|decrease)', re.I)
+bad_expression_1 = re.compile(r'(?:of (?:shareholder|shareholder) meeting|schedules earnings? release|phase one|comparable store|exploration)', re.I)
+bad_expression_2 = re.compile(r'of the(?:exchange offers|)')
+good_words = re.compile(r'financial|quarter|fiscal|earnings', re.I)
+
+def confirm_filing(text):
+    if re.search('(?:operator|moderator|shareholder|stockholder)', text, re.I):
+        return False
+    if good_words.search(text):
+        return True
+    else:
+        return False
+
 
 for year in years:
     print(year)
     filings = os.listdir(os.path.join(filing_path, year))
     for filing in filings:
+        #with open(os.path.join('C:\\Zahn\\RUN_2\\Regex_Search_Earnings\\2007\\0000020232-07-000004.html')) as f:
         with open(os.path.join(filing_path, year, filing)) as f:
             filing_text_lines = islice(f, 100)
             text = ''
@@ -174,20 +187,18 @@ for year in years:
                 text += ''.join(line)
             soup = BeautifulSoup(text, 'lxml')
             text = soup.get_text()
-
+            text = re.sub('\n+', '\n', text)
+            text = text.split('\n')
+            text = ''.join(text[:10])
+            earnings_announcement = False
             if expression.search(text):
-                if re.search('(?:operator|moderator|shareholder vote)', text, re.I):
-                    write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Not_Earnings', year), filing)
-                else:
-                    write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Earnings', year), filing)
+                earnings_announcement = confirm_filing(text)
             elif expression_2.search(text):
-                if re.search('(?:operator|moderator|shareholder vote)', text, re.I):
-                    write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Not_Earnings', year), filing)
-                else:
-                    write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Earnings', year), filing)
+                earnings_announcement = confirm_filing(text)
+            if earnings_announcement:
+                write(f, os.path.join('C:\\', 'Zahn', 'RUN_2', 'Regex_Search_Earnings', year), filing)
             else:
-                write(f, os.path.join('C:\\', 'Zahn', 'RUN_1', 'Regex_Search_Not_Earnings', year), filing)
-
+                write(f, os.path.join('C:\\', 'Zahn', 'RUN_2', 'Regex_Search_Not_Earnings', year), filing)
 #determine topics for 8-K
 
     #         line_count = 0
