@@ -8,6 +8,7 @@ identify_filenames = IdentifyFilename(identified_companies_csv)
 
 main_path = os.path.join('/home/pikakilla', 'Zahn', 'Articles')
 output_path = os.path.join('/home/pikakilla', 'Zahn', 'Output')
+os.makedirs(os.path.join('/home/pikakilla', 'Zahn', 'Output'), exist_ok=True)
 files = os.listdir(main_path)
 rtf_parser = ParseRtf(output_path)
 

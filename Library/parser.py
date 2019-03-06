@@ -62,6 +62,7 @@ class ParseRtf(object):
         """
         #identify all dates in factset date format
         self.dates = re.compile(r"([0-9]{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December) (20[0-9]{2})")
+        self.times = re.compile(r"([0-9]{2}):([0-9]{2})")
         self.output_directory = os.path.join(output_directory)
         self.files_output = defaultdict(int)
         self.cache = None
@@ -76,12 +77,13 @@ class ParseRtf(object):
         """
         parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(rtf_text)))
         date = self._find_date(parsed_text)
+        time = self._find_time(parsed_text)
         if date is None:
             #print('no date')
             return
         else:
             try:
-                filename = filename+date
+                filename = filename+date+'_'+time
             except TypeError:
                 print('halt')
             output(parsed_text, filename, self.output_directory)
@@ -96,27 +98,38 @@ class ParseRtf(object):
         :return: None -- Outputs to file
         """
         date = None
+        time = None
         #find the first date only
         found_date = False
+        found_time = False
         for line in rtf_list:
             parsed_text = self._remove_type_1_tags(self._clean_url_field(self._create_newlines(line)))
             #find the article date in the line
             date_t = self._find_date(parsed_text)
+            time_t = self._find_time(parsed_text)
             if date_t and found_date == False:
                 found_date = True
                 date = date_t
+            if time_t and found_time == False:
+                found_time = True
+                time = time_t
             #determine if we are at the end of the file, if not, store line in cache
             #we should use the original line
             if self._end_of_type_1_document(line):
                 try:
-                    filename_o = filename + date
+                    filename_o = filename + date + '_' + time
                 except TypeError:
-                    print('halt')
+                    #print('halt')
+                    if time is None:
+                        filename_o = filename + date + '_0000'
                 self.cache += (parsed_text)
-                output(self.cache, filename_o, self.output_directory)
+                try:
+                    output(self.cache, filename_o, self.output_directory)
+                except UnboundLocalError:
+                    print('uhoh')
                 self._clear_cache()
                 self.files_output[file] += 1
-                #update the date flag
+                #update the datej flag
                 found_date = False
             else:
                 self._update_cache(parsed_text)
@@ -132,10 +145,11 @@ class ParseRtf(object):
         """
         first_run = True
         date_l = None
+        time_l = None
         for line in rtf_list:
             if self.identify_rtf_article(line):
                 parsed_text = self._remove_tags(self._clean_url_field(self._create_newlines(line)))
-
+                time = self._find_time(parsed_text)
                 date = self._find_date(parsed_text)
                 if date is None:
                     self._update_cache(parsed_text)
@@ -144,13 +158,17 @@ class ParseRtf(object):
                     self.cache = parsed_text
                     first_run = False
                     date_l = date
+                    time_l = time
                     continue
                 try:
-                    filename_o = filename+date_l
+                    filename_o = filename+date_l+'_'+time_l
                 except TypeError:
-                    print('halt')
+                    if time_l is None:
+                        filename_o = filename + date_l + '_0000'
+                    #print('halt')
                 output(self.cache, filename_o, self.output_directory)
                 date_l = date
+                time_l = time
                 self._clear_cache()
                 self.cache = parsed_text
                 self.files_output[file] += 1
@@ -159,7 +177,7 @@ class ParseRtf(object):
         """
         Main entry point for class.
         Parses a RTF file that is in a list format
-        Outputs file to location specified during the construction of the parse_rtf objet
+        Outputs file to location specified during the construction of the parse_rtf object
         :param rtf_list: List of RTF text
         :param filename: Base output filename of combined factset articles in rtf document
         :param file: OPTIONAL -- filename of rtf document for diagnostics
@@ -205,6 +223,20 @@ class ParseRtf(object):
         else:
             day = '0{}'.format(date.group(1))
         return '{}{}{}'.format(date.group(3), month, day)
+
+    def _find_time(self, rtf_text):
+        """
+        Finds the timestamp for the news article
+        :param rtf_text: identified rtf text
+        :return: STRING -- Time in format HHMM
+        """
+        time = self.times.search(rtf_text)
+        #find time
+        if time is None:
+            return time
+        else:
+            return '{}{}'.format(time.group(1), time.group(2))
+
 
     @staticmethod
     def _document_is_type_1(text):
@@ -364,7 +396,8 @@ class IdentifyFilename(object):
                     {'tic':row['tic'],
                      'gvkey_chr':row['gvkey_chr'],
                      'conm':row['conm'],
-                     'cusip':row['cusip']}
+                     'cusip':row['cusip'],
+                     }
                 )
 
     def construct_output_filename(self, filename):
@@ -395,7 +428,8 @@ class IdentifyFilename(object):
                 td['gvkey_chr'],
                 key,
                 td['cusip'],
-                td['tic']
+                td['tic'],
+
             )
         else:
             for dict_list in td:
@@ -406,7 +440,7 @@ class IdentifyFilename(object):
                             dict_list['gvkey_chr'],
                             key,
                             dict_list['cusip'],
-                            dict_list['tic']
+                            dict_list['tic'],
                         )
                 except TypeError:
                     print('ERROR')
