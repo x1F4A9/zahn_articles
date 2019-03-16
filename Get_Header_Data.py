@@ -4,7 +4,7 @@ sys.path.append('/home/pikakilla/PycharmProjects/Edgar')
 
 from headerParse import runEdgarHeaderSearch
 addHeaders = True
-csvFile = os.path.join('/media/pikakilla/EDGAR/ALL_8K_HEADER_INFO_2004_2019.csv')
+csvFile = os.path.join('/media/pikakilla/EDGAR/ALL_8K_HEADER_INFO_2004_2019_run_2.csv')
 
 
 if __name__ == '__main__':

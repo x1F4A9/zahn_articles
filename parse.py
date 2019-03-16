@@ -13,8 +13,8 @@ if __name__ == '__main__':
     for root, dir, files in os.walk(root_dir, topdown=True):
         for file in files:
             with open(os.path.join(root_dir, root, file), errors='ignore') as f:
-                if root.split('/')[-2] in ['2018', '2019', '2013', '2012', '2010', '2008', '2006', '2005']:
-                    continue
+                # if root.split('/')[-2] in ['2018', '2019', '2013', '2012', '2010', '2008', '2006', '2005']:
+                #     continue
                 text = f.readlines(10000)
                 header_dict = headerSearch.searchEdgarHeader(textSnippet=text)
                 #if header_dict['ACCESSION NUMBER'] != '0001144204-18-058900':
