@@ -8,7 +8,7 @@ import multiprocessing as mp
 root_dir = '/media/abc-123/EDGAR/Forms/8-K'
 
 
-csvFile = os.path.join('/media/abc-123/EDGAR/ALL_8K_HEADER_INFO_2002_2019_2.csv')
+csvFile = os.path.join('/home/abc-123/ALL_8K_HEADER_INFO_2002_2019_2.csv')
 
 headerSearch = runEdgarHeaderSearch(sort=True, default=True)
 
@@ -83,6 +83,6 @@ def main():
     #                 outputFiling = []
 
 
-#todo -- make this parallel processing
+
 if __name__ == '__main__':
     main()
