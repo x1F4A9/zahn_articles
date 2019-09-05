@@ -164,7 +164,7 @@ class ParseRtf(object):
                     filename_o = filename+date_l+'_'+time_l
                 except TypeError:
                     if time_l is None:
-                        filename_o = filename + date_l + '_0000'
+                        filename_o = filename + date_l + '_000000'
                     #print('halt')
                 output(self.cache, filename_o, self.output_directory)
                 date_l = date
