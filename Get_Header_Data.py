@@ -1,3 +1,4 @@
+#TODO: Add more comments
 import sys
 import os
 import csv
@@ -20,6 +21,7 @@ with open(csvFile, 'w', newline='', errors="ignore", encoding='UTF-8') as csv_o:
 results = []
 
 def worker(arg, q):
+    '''main process'''
     with open(arg, errors='ignore') as f:
         file = f.readlines(25000)
         res = headerSearch.searchEdgarHeader(textSnippet=file)
@@ -39,25 +41,35 @@ def listener(q):
             csv_l.flush()
 
 def main():
+    #must use Manager queue here, or will not work
+    #manager locks the file and creates a queue
     manager = mp.Manager()
     q = manager.Queue()
     pool = mp.Pool(mp.cpu_count() - 1)
 
+    #put listener to work first
+    #we do not want to have data before the listener is ready
     watcher = pool.apply_async(listener, (q,))
 
+
+    #get the list of all the filings to open
     filings_location = []
     for root, dir, files in os.walk(root_dir, topdown=True):
         for file in files:
             filings_location.append(os.path.join(root_dir, root, file))
 
+    #create a list of current jobs
+    #fire off all the workers
     jobs = []
     for filing in filings_location:
         job = pool.apply_async(worker, (filing, q))
         jobs.append(job)
 
+    #collec results from the workers through the pool result queue
     for job in jobs:
         job.get()
 
+    #we are done. kill the listener
     q.put('kill')
     pool.close()
     pool.join()
