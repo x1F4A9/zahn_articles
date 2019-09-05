@@ -9,8 +9,8 @@ import multiprocessing as mp
 import pickle
 from datetime import datetime
 
-use_pickle = True
-use_pickle_article = True
+use_pickle = False
+use_pickle_article = False
 
 nltk.download('punkt') # if necessary...
 
@@ -45,6 +45,10 @@ def cosine_sim(text1, text2):
     return ((tfidf * tfidf.T).A)[0,1]
 
 
+def jaccard_sim(text1,text2):
+    jaccard = nltk.jaccard_distance(text1, text2)
+    return jaccard
+
 class ViviDict(dict):
     def __missing__(self, key):
         value = self[key] = type(self)()
@@ -74,12 +78,13 @@ def find_articles(article):
                 article_2_location = os.path.join(parsed_articles_root_dir+article_2_candidate[1])
                 with open(article_2_location, 'r', errors='ignore') as article_2:
                     ordered_fieldnames_1 = OrderedDict(
-                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None),
-                         ('SIMSCORE', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
+                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
+                         ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
                          ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
                          ('TIMESTAMP DISTANCE', None)])
                     article_2_text = article_2.read()
-                    ordered_fieldnames_1['SIMSCORE'] = cosine_sim(article_1_text, article_2_text)
+                    ordered_fieldnames_1['SIMSCORE COSINE'] = cosine_sim(article_1_text, article_2_text)
+                    ordered_fieldnames_1['SIMSCORE JACCARD'] = jaccard_sim(article_1_text, article_2_text)
                     ordered_fieldnames_1['ACCESSION NUMBER'] = article_2_key
                     ordered_fieldnames_1['EXHIBIT FILENAME'] = article_2_fields[1]
                     ordered_fieldnames_1['ARTICLE FILENAME'] = article[1]
@@ -119,7 +124,7 @@ def find_articles(article):
 
 
 #create articles list
-articles_root = os.path.join('/home/pikakilla/Zahn/Output_2')
+articles_root = os.path.join('/media/abc-123/EDGAR/Zahn/Output_2')
 
 articles = os.listdir(articles_root)
 
@@ -188,7 +193,7 @@ with open('./Library/linking_table.csv', 'r', errors='ignore') as f:
 #FILINGS-DICT (MATCH YEAR/FIND CLOSEST FILING/GET FILENAME)
 #COMPARE SIMILARITIES BETWEEN FILES
 
-header_file = os.path.join('/media/pikakilla/EDGAR/ALL_8K_HEADER_INFO_2004_2019_RO.csv')
+header_file = os.path.join('/media/abc-123/EDGAR/ALL_8K_HEADER_INFO_2002_2019_RO.csv')
 header_dict = {}
 #ACCEPTANCE-DATETIME,ACCESSION NUMBER,CENTRAL INDEX KEY,CITY,COMPANY CONFORMED NAME,CONFORMED PERIOD OF REPORT,
 #CONFORMED SUBMISSION TYPE,FILED AS OF DATE,FILENAME,FILING YEAR,FISCAL YEAR END,ITEM INFORMATION,
@@ -214,6 +219,8 @@ else:
                 except (TypeError, ValueError):
                     quarter = 0
             key = line.get('CENTRAL INDEX KEY', None)
+            #careful below! Older versions of edgar header search wont correctly return the acceptance-datetime
+            #use the newest headerParse version from the github EDGAR repository.
             time = line.get('ACCEPTANCE-DATETIME', None)
             accession = line.get('ACCESSION NUMBER', None)
             location = os.path.join('/'+year, 'QTR'+str(quarter), accession+'.txt')
@@ -290,26 +297,34 @@ else:
                                     d1 = datetime.strptime(value[1], "%Y%m%d%H%M%S")
                                 except ValueError:
                                     print(value[1])
-                                    print('UHOH FILING')
+                                    print('value error')
+                                except TypeError:
+                                    print(value[1])
+                                    print('type error')
                                 try:
                                   #  print(article_values[0])
                                     d2 = datetime.strptime(article_values[0], "%Y%m%d%H%M%S")
                                 except ValueError:
                                     print(article_values[0])
-                                    print('UHOH ARTICLE')
+                                    print('value error')
                                 #compare the datetime formats, keep the lowest
                                 if (d2-d1).total_seconds() > 0:
-                                    if lowest > (d2-d1).total_seconds():
-                                        lowest = (d2-d1).total_seconds()
+                                    #changed this code -- we want to grab ALL articles that are 5 days or less 432000 seconds
+                                    #if lowest > (d2-d1).total_seconds():
+                                    if (d2-d1).total_seconds() <= 432000:
+                                        #lowest = (d2-d1).total_seconds()
                                         #change this in the future, horrible HORRIBLE code.
                                         #year, hand collected article filename, exhibit filename, hand collected article timestamp,
                                         #exhibit timestamp, distance between timestamps.
+                                        #comment below out to grab closest article
                                         articles = (article_year, article_values[1], value[0], article_values[0], value[1], lowest,
                                                     EDGAR_filing_year)
+                                        articles_to_compare.append(articles)
 
                     #if a match is found, append the match to the articles to compare
-                    if articles is not None:
-                        articles_to_compare.append(articles)
+                    #commented out -- remove to grab the closest article
+                    #if articles is not None:
+                        #articles_to_compare.append(articles)
     pickle.dump(articles_to_compare, open('articles_to_compare.pickle', 'wb'))
 
 
@@ -317,14 +332,14 @@ else:
 
 #match parsed articles with articles to compare
 #perform cosine similarity
-output_file = '/media/pikakilla/EDGAR/simscore_after.csv'
+output_file = '/media/abc-123/EDGAR/simscore_after.csv'
 counter = 1
 while os.path.isfile(output_file):
     output_file = os.path.join('/media/pikakilla/EDGAR/simscore_'+str(counter)+'.csv')
     counter += 1
 ordered_fieldnames = OrderedDict(
-                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None),
-                         ('SIMSCORE', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
+                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
+                         ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
                          ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
                          ('TIMESTAMP DISTANCE', None)])
 with open(output_file, 'w', errors='ignore', newline='') as f:
@@ -338,50 +353,53 @@ results = []
 
 
 
-results = [pool.map(find_articles, tqdm(articles_to_compare))]
+# results = [pool.map(find_articles, tqdm(articles_to_compare))]
+#
+# pickle.dump(results, open('results_after.pickle', 'wb'))
 
-pickle.dump(results, open('results_after.pickle', 'wb'))
+# for l_val in results:
+#     for l_val_2 in l_val:
+#         for dictionary in l_val_2:
+#             with open(output_file, 'a', errors='ignore', newline='') as f:
+#                 writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
+#                 writer.writerow(dictionary)
 
-for l_val in results:
-    for l_val_2 in l_val:
-        for dictionary in l_val_2:
-            with open(output_file, 'a', errors='ignore', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
-                writer.writerow(dictionary)
-#for article in tqdm(articles_to_compare):
-    # if counter > 700:
-    #     break
-    # counter += 1
 
-    # article_1_location = os.path.join(articles_root, article[1])
-    # with open(article_1_location, 'r', errors='ignore') as article_1:
-    #     article_1_text = article_1.read()
-    #     article_2_key = article[2]
-    #     article_2_match = parsed_articles_dict[year].get(article_2_key, None)
-    #     if article_2_match:
-    #         for article_2_candidate in article_2_match:
-    #             article_2_fields = article_2_candidate[0].split(sep='<>')
-    #             article_2_location = os.path.join(parsed_articles_root_dir+article_2_candidate[1])
-    #             with open(article_2_location, 'r', errors='ignore') as article_2:
-    #                 ordered_fieldnames = OrderedDict(
-    #                     [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None),
-    #                      ('SIMSCORE', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
-    #                      ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
-    #                      ('TIMESTAMP DISTANCE', None)])
-    #                 article_2_text = article_2.read()
-    #                 ordered_fieldnames['SIMSCORE'] = cosine_sim(article_1_text, article_2_text)
-    #                 ordered_fieldnames['ACCESSION NUMBER'] = article_2_key
-    #                 ordered_fieldnames['EXHIBIT FILENAME'] = article_2_fields[1]
-    #                 ordered_fieldnames['ARTICLE FILENAME'] = article[1]
-    #                 ordered_fieldnames['EXHIBIT NAME'] = article_2_fields[2]
-    #                 ordered_fieldnames['INTERNAL EXHIBIT FILENAME'] = article_2_candidate[0]
-    #                 ordered_fieldnames['INTERNAL ARTICLE FILENAME'] = article[1]
-    #                 ordered_fieldnames['ARTICLE TIMESTAMP'] = article[3]
-    #                 ordered_fieldnames['EXHIBIT TIMESTAMP'] = article[4]
-    #                 ordered_fieldnames['TIMESTAMP DISTANCE'] = article[5]
-    #                 with open(output_file, 'a', errors='ignore', newline='') as f:
-    #                     writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
-    #                     writer.writerow(ordered_fieldnames)
+for article in tqdm(articles_to_compare):
+    if counter > 700:
+        break
+    counter += 1
+
+    article_1_location = os.path.join(articles_root, article[1])
+    with open(article_1_location, 'r', errors='ignore') as article_1:
+        article_1_text = article_1.read()
+        article_2_key = article[2]
+        article_2_match = parsed_articles_dict[year].get(article_2_key, None)
+        if article_2_match:
+            for article_2_candidate in article_2_match:
+                article_2_fields = article_2_candidate[0].split(sep='<>')
+                article_2_location = os.path.join(parsed_articles_root_dir+article_2_candidate[1])
+                with open(article_2_location, 'r', errors='ignore') as article_2:
+                    ordered_fieldnames = OrderedDict(
+                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
+                         ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
+                         ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
+                         ('TIMESTAMP DISTANCE', None)])
+                    article_2_text = article_2.read()
+                    ordered_fieldnames['SIMSCORE COSINE'] = cosine_sim(article_1_text, article_2_text)
+                    ordered_fieldnames['SIMSCORE JACCARD'] = jaccard_sim(article_1_text, article_2_text)
+                    ordered_fieldnames['ACCESSION NUMBER'] = article_2_key
+                    ordered_fieldnames['EXHIBIT FILENAME'] = article_2_fields[1]
+                    ordered_fieldnames['ARTICLE FILENAME'] = article[1]
+                    ordered_fieldnames['EXHIBIT NAME'] = article_2_fields[2]
+                    ordered_fieldnames['INTERNAL EXHIBIT FILENAME'] = article_2_candidate[0]
+                    ordered_fieldnames['INTERNAL ARTICLE FILENAME'] = article[1]
+                    ordered_fieldnames['ARTICLE TIMESTAMP'] = article[3]
+                    ordered_fieldnames['EXHIBIT TIMESTAMP'] = article[4]
+                    ordered_fieldnames['TIMESTAMP DISTANCE'] = article[5]
+                    with open(output_file, 'a', errors='ignore', newline='') as f:
+                        writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
+                        writer.writerow(ordered_fieldnames)
 
 
 print('done')
