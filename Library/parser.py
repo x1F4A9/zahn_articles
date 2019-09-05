@@ -121,7 +121,7 @@ class ParseRtf(object):
                 except TypeError:
                     #print('halt')
                     if time is None:
-                        filename_o = filename + date + '_0000'
+                        filename_o = filename + date + '_000000'
                 self.cache += (parsed_text)
                 try:
                     output(self.cache, filename_o, self.output_directory)
