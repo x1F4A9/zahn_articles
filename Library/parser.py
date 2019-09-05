@@ -63,6 +63,7 @@ class ParseRtf(object):
         #identify all dates in factset date format
         self.dates = re.compile(r"([0-9]{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December) (20[0-9]{2})")
         self.times = re.compile(r"([0-9]{2}):([0-9]{2})(?::[0-9]{2})?")
+        self.times_single_digit = re.compile(r"([0-9]{1,2}):([0-9]{2})(?::[0-9]{2})?")
         self.output_directory = os.path.join(output_directory)
         self.files_output = defaultdict(int)
         self.cache = None
@@ -237,6 +238,13 @@ class ParseRtf(object):
         if len(time.groups()) == 3:
             return '{}{}{}'.format(time.group(1), time.group(2), time.group(3))
         else:
+            if len(time.group(1)) == 1:
+                time = self.times_single_digit.search(rtf_text)
+                hour = '0'+time.group(1)
+                if len(time.groups()) == 3:
+                    return('{}{}{}'.format(hour, time.group(2), time.group(3)))
+                else:
+                    return('{}{}{}'.format(hour, time.group(2), '00'))
             return '{}{}{}'.format(time.group(1), time.group(2), '00')
 
 
