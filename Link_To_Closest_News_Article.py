@@ -46,7 +46,9 @@ def cosine_sim(text1, text2):
 
 
 def jaccard_sim(text1,text2):
-    jaccard = nltk.jaccard_distance(text1, text2)
+    #Unlike Edit Distance, you cannot just run Jaccard Distance on the strings directly; you must first convert them to the set type.
+    #to run jaccard, the inputs MUST be sets -- remember the math behind jaccard distances
+    jaccard = nltk.jaccard_distance(set(text1), set(text2))
     return jaccard
 
 class ViviDict(dict):
@@ -366,41 +368,43 @@ results = []
 #                 writer.writerow(dictionary)
 
 
-for article in tqdm(articles_to_compare):
-    if counter > 700:
-        break
-    counter += 1
+for year in range(2010, 2017):
+    for article in tqdm(articles_to_compare):
+        if counter > 700:
+            break
+        counter += 1
 
-    article_1_location = os.path.join(articles_root, article[1])
-    with open(article_1_location, 'r', errors='ignore') as article_1:
-        article_1_text = article_1.read()
-        article_2_key = article[2]
-        article_2_match = parsed_articles_dict[year].get(article_2_key, None)
-        if article_2_match:
-            for article_2_candidate in article_2_match:
-                article_2_fields = article_2_candidate[0].split(sep='<>')
-                article_2_location = os.path.join(parsed_articles_root_dir+article_2_candidate[1])
-                with open(article_2_location, 'r', errors='ignore') as article_2:
-                    ordered_fieldnames = OrderedDict(
-                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
-                         ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
-                         ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
-                         ('TIMESTAMP DISTANCE', None)])
-                    article_2_text = article_2.read()
-                    ordered_fieldnames['SIMSCORE COSINE'] = cosine_sim(article_1_text, article_2_text)
-                    ordered_fieldnames['SIMSCORE JACCARD'] = jaccard_sim(article_1_text, article_2_text)
-                    ordered_fieldnames['ACCESSION NUMBER'] = article_2_key
-                    ordered_fieldnames['EXHIBIT FILENAME'] = article_2_fields[1]
-                    ordered_fieldnames['ARTICLE FILENAME'] = article[1]
-                    ordered_fieldnames['EXHIBIT NAME'] = article_2_fields[2]
-                    ordered_fieldnames['INTERNAL EXHIBIT FILENAME'] = article_2_candidate[0]
-                    ordered_fieldnames['INTERNAL ARTICLE FILENAME'] = article[1]
-                    ordered_fieldnames['ARTICLE TIMESTAMP'] = article[3]
-                    ordered_fieldnames['EXHIBIT TIMESTAMP'] = article[4]
-                    ordered_fieldnames['TIMESTAMP DISTANCE'] = article[5]
-                    with open(output_file, 'a', errors='ignore', newline='') as f:
-                        writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
-                        writer.writerow(ordered_fieldnames)
+        article_1_location = os.path.join(articles_root, article[1])
+        with open(article_1_location, 'r', errors='ignore') as article_1:
+            article_1_text = article_1.read()
+            article_2_key = article[2]
+            #make sure to cast the year as a string for the key, year is an integer when we do the range above
+            article_2_match = parsed_articles_dict[str(year)].get(article_2_key, None)
+            if article_2_match:
+                for article_2_candidate in article_2_match:
+                    article_2_fields = article_2_candidate[0].split(sep='<>')
+                    article_2_location = os.path.join(parsed_articles_root_dir+article_2_candidate[1])
+                    with open(article_2_location, 'r', errors='ignore') as article_2:
+                        ordered_fieldnames = OrderedDict(
+                            [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
+                             ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
+                             ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
+                             ('TIMESTAMP DISTANCE', None)])
+                        article_2_text = article_2.read()
+                        ordered_fieldnames['SIMSCORE COSINE'] = cosine_sim(article_1_text, article_2_text)
+                        ordered_fieldnames['SIMSCORE JACCARD'] = jaccard_sim(article_1_text, article_2_text)
+                        ordered_fieldnames['ACCESSION NUMBER'] = article_2_key
+                        ordered_fieldnames['EXHIBIT FILENAME'] = article_2_fields[1]
+                        ordered_fieldnames['ARTICLE FILENAME'] = article[1]
+                        ordered_fieldnames['EXHIBIT NAME'] = article_2_fields[2]
+                        ordered_fieldnames['INTERNAL EXHIBIT FILENAME'] = article_2_candidate[0]
+                        ordered_fieldnames['INTERNAL ARTICLE FILENAME'] = article[1]
+                        ordered_fieldnames['ARTICLE TIMESTAMP'] = article[3]
+                        ordered_fieldnames['EXHIBIT TIMESTAMP'] = article[4]
+                        ordered_fieldnames['TIMESTAMP DISTANCE'] = article[5]
+                        with open(output_file, 'a', errors='ignore', newline='') as f:
+                            writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
+                            writer.writerow(ordered_fieldnames)
 
 
 print('done')
