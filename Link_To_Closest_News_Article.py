@@ -241,7 +241,7 @@ else:
 #4) report both results
 
 parsed_articles_dict = {}
-parsed_articles_root_dir = '/media/pikakilla/EDGAR/8K_Output'
+parsed_articles_root_dir = '/media/abc-123/EDGAR/8K_Output'
 if use_pickle:
     parsed_articles_dict = pickle.load(open('parsed_articles_dict.pickle', 'rb'))
 else:
