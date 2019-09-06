@@ -7,8 +7,8 @@ identified_companies_csv = os.path.join('/media/abc-123/EDGAR/Zahn/Export', 'all
 identify_filenames = IdentifyFilename(identified_companies_csv)
 
 main_path = os.path.join('/media/abc-123/EDGAR/Zahn/Export', 'Articles')
-output_path = os.path.join('/media/abc-123/EDGAR/Zahn/', 'Output_2')
-os.makedirs(os.path.join('/media/abc-123/EDGAR/Zahn/', 'Output_2'), exist_ok=True)
+output_path = os.path.join('/media/abc-123/EDGAR/Zahn/', 'Output_3')
+os.makedirs(os.path.join('/media/abc-123/EDGAR/Zahn/', 'Output_3'), exist_ok=True)
 files = os.listdir(main_path)
 rtf_parser = ParseRtf(output_path)
 
@@ -38,8 +38,8 @@ for key in files_read.keys():
     if files_not_output_t.get(key, 0) == 0:
         files_not_output[key] = 0
 
-with open(os.path.join('/media/abc-123/EDGAR/Zahn/files_output_2.txt'),'w') as f:
+with open(os.path.join('/media/abc-123/EDGAR/Zahn/files_output_3.txt'),'w') as f:
     f.write(str(rtf_parser.files_output))
 
-with open(os.path.join('/media/abc-123/EDGAR/Zahn/files_not_output_2.txt'),'w') as f:
+with open(os.path.join('/media/abc-123/EDGAR/Zahn/files_not_output_3.txt'),'w') as f:
     f.write(str(files_not_output))

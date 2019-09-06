@@ -9,8 +9,8 @@ import multiprocessing as mp
 import pickle
 from datetime import datetime
 
-use_pickle = False
-use_pickle_article = False
+use_pickle = True
+use_pickle_article = True
 
 nltk.download('punkt') # if necessary...
 
@@ -297,16 +297,17 @@ else:
                                     d1 = datetime.strptime(value[1], "%Y%m%d%H%M%S")
                                 except ValueError:
                                     print(value[1])
-                                    print('value error')
+                                    print('value error d1')
                                 except TypeError:
                                     print(value[1])
-                                    print('type error')
+                                    print('type error d1')
                                 try:
                                   #  print(article_values[0])
                                     d2 = datetime.strptime(article_values[0], "%Y%m%d%H%M%S")
-                                except ValueError:
-                                    print(article_values[0])
-                                    print('value error')
+                                except ValueError as error_text:
+                                     print(article_values[0])
+                                     print(len(article_values[0]))
+                                     print('value error d2 {}'.format(error_text))
                                 #compare the datetime formats, keep the lowest
                                 if (d2-d1).total_seconds() > 0:
                                     #changed this code -- we want to grab ALL articles that are 5 days or less 432000 seconds
@@ -335,7 +336,7 @@ else:
 output_file = '/media/abc-123/EDGAR/simscore_after.csv'
 counter = 1
 while os.path.isfile(output_file):
-    output_file = os.path.join('/media/pikakilla/EDGAR/simscore_'+str(counter)+'.csv')
+    output_file = os.path.join('/media/abc-123/EDGAR/simscore_'+str(counter)+'.csv')
     counter += 1
 ordered_fieldnames = OrderedDict(
                         [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
@@ -346,7 +347,7 @@ with open(output_file, 'w', errors='ignore', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
     writer.writeheader()
 counter = 0
-pool = mp.Pool(mp.cpu_count())
+pool = mp.Pool(mp.cpu_count() - 1)
 results = []
 
 #articles_to_compare = articles_to_compare[1:100]
