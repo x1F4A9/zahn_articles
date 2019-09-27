@@ -12,6 +12,7 @@ from tqdm import tqdm
 import multiprocessing as mp
 import pickle
 from datetime import datetime
+from bs4 import BeautifulSoup
 
 import spacy
 nlp = spacy.load('en_core_web_sm')
@@ -23,25 +24,25 @@ positive_word_list = []
 
 with open(os.path.join(list_directory_root, 'lm_positive'), 'r') as f:
     for line in f:
-        positive_word_list.append(line.upper())
+        positive_word_list.append(line.upper().rstrip())
 
 negative_word_list = []
 
 with open(os.path.join(list_directory_root, 'lm_negative'), 'r') as f:
     for line in f:
-        negative_word_list.append(line.upper())
+        negative_word_list.append(line.upper().rstrip())
 
 forward_word_list = []
 
 with open(os.path.join(list_directory_root, 'forward_looking'), 'r') as f:
     for line in f:
-        forward_word_list.append(line.upper())
+        forward_word_list.append(line.upper().rstrip())
 
 earnings_word_list = []
 
 with open(os.path.join(list_directory_root, 'BVS_EARNINGS'), 'r') as f:
     for line in f:
-        earnings_word_list.append(line.upper())
+        earnings_word_list.append(line.upper().rstrip())
 
 
 def nsyl(word):
@@ -76,17 +77,17 @@ def detect_past_sentence(sentence):
         sent.root.tag_ == "VBD" or
         any(w.dep_ == "aux" and w.tag_ == "VBD" for w in sent.root.children))
 
-def detect_future_sentence(sentence):
+def detect_present_sentence(sentence):
     sent = list(nlp(sentence).sents)[0]
     return (
-        sent.root.tag_ == "VBP" or
-        any(w.dep_ == "aux" and w.tag_ == "VBP" for w in sent.root.children))
+        sent.root.tag_ == "VB" or
+        any(w.dep_ == "aux" and w.tag_ == "VB" for w in sent.root.children))
 
 def determine_words(sentence_list, word_list):
     number_of_words = 0
     for sentence in sentence_list:
         for word in sentence.split():
-            if word.upper() in word_list:
+            if word.upper().rstrip() in word_list:
                 number_of_words += 1
     return number_of_words
 
@@ -94,7 +95,7 @@ def determine_sentences(sentence_list, word_list):
     number_of_sentences = 0
     for sentence in sentence_list:
         for word in sentence.split():
-            if word.upper in word_list:
+            if word.upper().rstrip() in word_list:
                 number_of_sentences += 1
                 break
     return number_of_sentences
@@ -103,7 +104,7 @@ def determine_sentences(sentence_list, word_list):
 def determine_sentence_negative_words(sentence):
     pass
 
-def count_words_in_document(sentence_list):
+def _count_words(sentence_list):
     number_of_words = 0
     for sentence in sentence_list:
         word_list = sentence.split()
@@ -112,13 +113,15 @@ def count_words_in_document(sentence_list):
 
 def parse_sentences(document):
     sentences = []
-    for sentence in sent_tokenize(document):
-        #Remove sentences that have greater than 50% alpha-numeric characters
-        numofnumbers = len([i for i in sentence if i.isdigit() is True])
-        sentencelength = len(sentence)
-        if numofnumbers / sentencelength < .5:
-            sentences.append(sentence)
-
+    try:
+        for sentence in sent_tokenize(document):
+            #Remove sentences that have greater than 50% alpha-numeric characters
+            numofnumbers = len([i for i in sentence if i.isdigit() is True])
+            sentencelength = len(sentence)
+            if numofnumbers / sentencelength < .5:
+                sentences.append(sentence)
+    except TypeError:
+        sentences = ['abc.']
     return sentences
 
 def _calculate_fog(sentences):
@@ -142,48 +145,39 @@ def _calculate_fog(sentences):
 def count_sentences(document):
     return len(parse_sentences(document))
 
-def detect_present_tense(document):
-    sentences = parse_sentences(document)
+def detect_present_tense(sentences):
     present_tense = 0
     for sentence in sentences:
-        if detect_present_tense(sentence):
+        if detect_present_sentence(sentence):
             present_tense += 1
     return present_tense
 
-def detect_past_tense(document):
-    sentences = parse_sentences(document)
+def detect_past_tense(sentences):
     past_tense = 0
     for sentence in sentences:
         if detect_past_sentence(sentence):
             past_tense += 1
     return past_tense
 
-def calculate_fog(document):
-    sentences = parse_sentences(document)
+def calculate_fog(sentences):
     return _calculate_fog(sentences)
 
-def count_positive_words(document):
-    sentences = parse_sentences(document)
+def count_positive_words(sentences):
     return determine_words(sentences, positive_word_list)
 
-def count_negative_words(document):
-    sentences = parse_sentences(document)
+def count_negative_words(sentences):
     return determine_words(sentences, negative_word_list)
 
-def count_forward_looking_sentences(document):
-    sentences = parse_sentences(document)
+def count_forward_looking_sentences(sentences):
     return determine_sentences(sentences, forward_word_list)
 
-def count_earnings_sentences(document):
-    sentences = parse_sentences(document)
+def count_earnings_sentences(sentences):
     return determine_sentences(sentences, earnings_word_list)
 
-def count_words_in_document(document):
-    sentences = parse_sentences(document)
-    return count_words_in_document(sentences)
+def count_words_in_document(sentences):
+    return _count_words(sentences)
 
-def count_numeric_sentences(document):
-    sentences = parse_sentences(document)
+def count_numeric_sentences(sentences):
     number_of_numeric_sentences = 0
     for sentence in sentences:
         for word in sentence:
@@ -248,6 +242,7 @@ class AutoVivication(dict):
             value = self[item] = type(self)()
             return value
 
+#construct all valid 8-k's
 all_8k_headers = {}
 with open('/media/abc-123/EDGAR/ALL_8K_HEADER_INFO_2002_2019_RO.csv', 'r', errors='ignore') as all_8k_header_file:
     reader = csv.DictReader(all_8k_header_file)
@@ -262,6 +257,9 @@ def find_articles(article):
     with open(article_1_location, 'r', errors='ignore') as article_1:
         article_1_text = article_1.read()
         article_2_key = article[2]
+        #only want those 8-Ks with a cover sheet and the earnings press release
+        if all_8k_headers[article_2_key]['PUBLIC DOCUMENT COUNT'] != '2':
+            return False
         article_2_match = parsed_articles_dict[year].get(article_2_key, None)
         if article_2_match:
             for article_2_candidate in article_2_match:
@@ -292,42 +290,77 @@ def find_articles(article):
                     identifying_fieldnames = article[1].split('_')
 
                     article_2_text = article_2.read()
+                    soup = BeautifulSoup(article_2_text, "lxml")
+                    #keep some tables -- they will be removed by the sentence parser if its pure numbers
+                    #some filers put their entire presentation in tabular format
+                    for table in soup.findAll('table'):
+                        count_number = 0
+                        text = table.get_text().strip()
+                        for character in text:
+                            if character.isnumeric():
+                                count_number += 1
+                        if count_number / len(text) < .8:
+                            table.decompose()
+                    article_2_text = soup.get_text()
+
+                    #post processing -- guest 2018 -- remove short lines
+                    article_2_pre_clean = article_2_text.split('/n')
+                    article_2_post_clean = []
+                    for line in article_2_pre_clean:
+                        if len(line) > 19:
+                            article_2_post_clean.append(line)
+                    article_2_text = ''.join(article_2_post_clean)
+
+
+                    article_1_pre_clean = article_1_text.split('/n')
+                    article_1_post_clean = []
+                    for line in article_1_pre_clean:
+                        if len(line) > 19:
+                            article_1_post_clean.append(line)
+                    article_1_text = ''.join(article_2_post_clean)
+
+
+                    article_2_sentences = parse_sentences(article_2_text)
+                    article_1_sentences = parse_sentences(article_1_text)
+
+
+
                     ordered_fieldnames_1['GVKEY'] = identifying_fieldnames[1]
                     ordered_fieldnames_1['FDS'] = identifying_fieldnames[2]
                     ordered_fieldnames_1['CUSIP'] = identifying_fieldnames[3]
                     ordered_fieldnames_1['TICKER'] = identifying_fieldnames[4]
                     try:
-                        ordered_fieldnames_1['NEWS ARTICLE PRESENT SENTENCE COUNT'] = detect_present_tense(article_1_text)
+                        ordered_fieldnames_1['NEWS ARTICLE PRESENT SENTENCE COUNT'] = detect_present_tense(article_1_sentences)
                     except:
                         ordered_fieldnames_1['NEWS ARTICLE PRESENT SENTENCE COUNT'] = '-99'
                     try:
-                        ordered_fieldnames_1['EDGAR PRESENT SENTENCE COUNT'] = detect_present_tense(article_2_text)
+                        ordered_fieldnames_1['EDGAR PRESENT SENTENCE COUNT'] = detect_present_tense(article_2_sentences)
                     except:
                         ordered_fieldnames_1['EDGAR PRESENT SENTENCE COUNT'] = '-99'
                     try:
-                        ordered_fieldnames_1['NEWS ARTICLE PAST SENTENCE COUNT'] = detect_past_tense(article_1_text)
+                        ordered_fieldnames_1['NEWS ARTICLE PAST SENTENCE COUNT'] = detect_past_tense(article_1_sentences)
                     except:
                         ordered_fieldnames_1['NEWS ARTICLE PAST SENTENCE COUNT'] = '-99'
                     try:
-                        ordered_fieldnames_1['EDGAR PAST SENTENCE COUNT'] = detect_past_tense(article_2_text)
+                        ordered_fieldnames_1['EDGAR PAST SENTENCE COUNT'] = detect_past_tense(article_2_sentences)
                     except:
                         ordered_fieldnames_1['EDGAR PAST SENTENCE COUNT'] = '-99'
-                    ordered_fieldnames_1['NEWS ARTICLE TOTAL SENTENCE COUNT'] = count_sentences(article_1_text)
-                    ordered_fieldnames_1['EDGAR TOTAL SENTENCE COUNT'] = count_sentences(article_2_text)
-                    ordered_fieldnames_1['NEWS ARTICLE FORWARD LOOKING SENTENCE COUNT'] = count_forward_looking_sentences(article_1_text)
-                    ordered_fieldnames_1['EDGAR FORWARD LOOKING SENTENCE COUNT'] = count_forward_looking_sentences(article_2_text)
-                    ordered_fieldnames_1['NEWS ARTICLE EARNINGS SENTENCE COUNT'] = count_earnings_sentences(article_1_text)
-                    ordered_fieldnames_1['EDGAR EARNINGS SENTENCE COUNT'] = count_earnings_sentences(article_2_text)
-                    ordered_fieldnames_1['NEWS ARTICLE NUMERIC SENTENCE COUNT'] = count_numeric_sentences(article_1_text)
-                    ordered_fieldnames_1['EDGAR NUMERIC SENTENCE COUNT'] = count_numeric_sentences(article_1_text)
-                    ordered_fieldnames_1['NEWS ARTICLE FOG'] = calculate_fog(article_1_text)
-                    ordered_fieldnames_1['EDGAR FOG'] = calculate_fog(article_2_text)
-                    ordered_fieldnames_1['NEWS ARTICLE POSITIVE WORDS'] = count_positive_words(article_1_text)
-                    ordered_fieldnames_1['EDGAR POSITIVE WORDS'] = count_positive_words(article_2_text)
-                    ordered_fieldnames_1['NEWS ARTICLE NEGATIVE WORDS'] = count_negative_words(article_1_text)
-                    ordered_fieldnames_1['EDGAR NEGATIVE WORDS'] = count_negative_words(article_2_text)
-                    ordered_fieldnames_1['NEWS ARTICLE TOTAL WORDS'] = count_words_in_document(article_1_text)
-                    ordered_fieldnames_1['EDGAR TOTAL WORDS'] = count_words_in_document(article_2_text)
+                    ordered_fieldnames_1['NEWS ARTICLE TOTAL SENTENCE COUNT'] = count_sentences(article_1_sentences)
+                    ordered_fieldnames_1['EDGAR TOTAL SENTENCE COUNT'] = count_sentences(article_2_sentences)
+                    ordered_fieldnames_1['NEWS ARTICLE FORWARD LOOKING SENTENCE COUNT'] = count_forward_looking_sentences(article_1_sentences)
+                    ordered_fieldnames_1['EDGAR FORWARD LOOKING SENTENCE COUNT'] = count_forward_looking_sentences(article_2_sentences)
+                    ordered_fieldnames_1['NEWS ARTICLE EARNINGS SENTENCE COUNT'] = count_earnings_sentences(article_1_sentences)
+                    ordered_fieldnames_1['EDGAR EARNINGS SENTENCE COUNT'] = count_earnings_sentences(article_2_sentences)
+                    ordered_fieldnames_1['NEWS ARTICLE NUMERIC SENTENCE COUNT'] = count_numeric_sentences(article_1_sentences)
+                    ordered_fieldnames_1['EDGAR NUMERIC SENTENCE COUNT'] = count_numeric_sentences(article_1_sentences)
+                    ordered_fieldnames_1['NEWS ARTICLE FOG'] = calculate_fog(article_1_sentences)
+                    ordered_fieldnames_1['EDGAR FOG'] = calculate_fog(article_2_sentences)
+                    ordered_fieldnames_1['NEWS ARTICLE POSITIVE WORDS'] = count_positive_words(article_1_sentences)
+                    ordered_fieldnames_1['EDGAR POSITIVE WORDS'] = count_positive_words(article_2_sentences)
+                    ordered_fieldnames_1['NEWS ARTICLE NEGATIVE WORDS'] = count_negative_words(article_1_sentences)
+                    ordered_fieldnames_1['EDGAR NEGATIVE WORDS'] = count_negative_words(article_2_sentences)
+                    ordered_fieldnames_1['NEWS ARTICLE TOTAL WORDS'] = count_words_in_document(article_1_sentences)
+                    ordered_fieldnames_1['EDGAR TOTAL WORDS'] = count_words_in_document(article_2_sentences)
                     ordered_fieldnames_1['SIMSCORE COSINE'] = cosine_sim(article_1_text, article_2_text)
                     ordered_fieldnames_1['SIMSCORE JACCARD'] = jaccard_sim(article_1_text, article_2_text)
                     ordered_fieldnames_1['ACCESSION NUMBER'] = article_2_key
@@ -631,7 +664,7 @@ pool = mp.Pool(mp.cpu_count() - 1)
 results = []
 
 #uncomment this to test writting the output of a subset of the articles in multithreading
-#articles_to_compare = articles_to_compare[1:100]
+articles_to_compare = articles_to_compare[1:100]
 
 
 #main writting of output for multithreading
@@ -640,50 +673,53 @@ results = [pool.map(find_articles, tqdm(articles_to_compare))]
 pickle.dump(results, open('results_after.pickle', 'wb'))
 
 for l_val in results:
-    for l_val_2 in l_val:
-        for dictionary in l_val_2:
-            with open(output_file, 'a', errors='ignore', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
-                writer.writerow(dictionary)
+    print(l_val)
+    if l_val:
+        for l_val_2 in l_val:
+            if l_val_2:
+                for dictionary in l_val_2:
+                    with open(output_file, 'a', errors='ignore', newline='') as f:
+                        writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
+                        writer.writerow(dictionary)
 
 #sequential code for testing -- slow
 # for year in range(2010, 2017):
 #     for article in tqdm(articles_to_compare):
-#         if counter > 50:
+#         if counter > 10:
 #             break
 #         counter += 1
-#
-#         article_1_location = os.path.join(articles_root, article[1])
-#         with open(article_1_location, 'r', errors='ignore') as article_1:
-#             article_1_text = article_1.read()
-#             article_2_key = article[2]
-#             #make sure to cast the year as a string for the key, year is an integer when we do the range above
-#             article_2_match = parsed_articles_dict[str(year)].get(article_2_key, None)
-#             if article_2_match:
-#                 for article_2_candidate in article_2_match:
-#                     article_2_fields = article_2_candidate[0].split(sep='<>')
-#                     article_2_location = os.path.join(parsed_articles_root_dir+article_2_candidate[1])
-#                     with open(article_2_location, 'r', errors='ignore') as article_2:
-#                         ordered_fieldnames = OrderedDict(
-#                             [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
-#                              ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
-#                              ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
-#                              ('TIMESTAMP DISTANCE', None)])
-#                         article_2_text = article_2.read()
-#                         ordered_fieldnames['SIMSCORE COSINE'] = cosine_sim(article_1_text, article_2_text)
-#                         ordered_fieldnames['SIMSCORE JACCARD'] = jaccard_sim(article_1_text, article_2_text)
-#                         ordered_fieldnames['ACCESSION NUMBER'] = article_2_key
-#                         ordered_fieldnames['EXHIBIT FILENAME'] = article_2_fields[1]
-#                         ordered_fieldnames['ARTICLE FILENAME'] = article[1]
-#                         ordered_fieldnames['EXHIBIT NAME'] = article_2_fields[2]
-#                         ordered_fieldnames['INTERNAL EXHIBIT FILENAME'] = article_2_candidate[0]
-#                         ordered_fieldnames['INTERNAL ARTICLE FILENAME'] = article[1]
-#                         ordered_fieldnames['ARTICLE TIMESTAMP'] = article[3]
-#                         ordered_fieldnames['EXHIBIT TIMESTAMP'] = article[4]
-#                         ordered_fieldnames['TIMESTAMP DISTANCE'] = article[5]
-#                         with open(output_file, 'a', errors='ignore', newline='') as f:
-#                             writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
-#                             writer.writerow(ordered_fieldnames)
+#         ordered_fieldnames_t = find_articles(article)
+#         # article_1_location = os.path.join(articles_root, article[1])
+#         # with open(article_1_location, 'r', errors='ignore') as article_1:
+#         #     article_1_text = article_1.read()
+#         #     article_2_key = article[2]
+#         #     #make sure to cast the year as a string for the key, year is an integer when we do the range above
+#         #     article_2_match = parsed_articles_dict[str(year)].get(article_2_key, None)
+#         #     if article_2_match:
+#         #         for article_2_candidate in article_2_match:
+#         #             article_2_fields = article_2_candidate[0].split(sep='<>')
+#         #             article_2_location = os.path.join(parsed_articles_root_dir+article_2_candidate[1])
+#         #             with open(article_2_location, 'r', errors='ignore') as article_2:
+#         #                 ordered_fieldnames = OrderedDict(
+#         #                     [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
+#         #                      ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
+#         #                      ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
+#         #                      ('TIMESTAMP DISTANCE', None)])
+#         #                 article_2_text = article_2.read()
+#         #                 ordered_fieldnames['SIMSCORE COSINE'] = cosine_sim(article_1_text, article_2_text)
+#         #                 ordered_fieldnames['SIMSCORE JACCARD'] = jaccard_sim(article_1_text, article_2_text)
+#         #                 ordered_fieldnames['ACCESSION NUMBER'] = article_2_key
+#         #                 ordered_fieldnames['EXHIBIT FILENAME'] = article_2_fields[1]
+#         #                 ordered_fieldnames['ARTICLE FILENAME'] = article[1]
+#         #                 ordered_fieldnames['EXHIBIT NAME'] = article_2_fields[2]
+#         #                 ordered_fieldnames['INTERNAL EXHIBIT FILENAME'] = article_2_candidate[0]
+#         #                 ordered_fieldnames['INTERNAL ARTICLE FILENAME'] = article[1]
+#         #                 ordered_fieldnames['ARTICLE TIMESTAMP'] = article[3]
+#         #                 ordered_fieldnames['EXHIBIT TIMESTAMP'] = article[4]
+#         #                 ordered_fieldnames['TIMESTAMP DISTANCE'] = article[5]
+#         with open(output_file, 'a', errors='ignore', newline='') as f:
+#             writer = csv.DictWriter(f, fieldnames=ordered_fieldnames_t[0])
+#             writer.writerow(ordered_fieldnames_t[0])
 
 
 print('done')
