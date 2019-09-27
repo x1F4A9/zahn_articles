@@ -2,12 +2,195 @@ import csv
 import math
 import os, sys
 import nltk, string
+nltk.download('cmudict')
+nltk.download('punkt')
+from nltk.tokenize import sent_tokenize
+from nltk.corpus import cmudict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from collections import OrderedDict
 from tqdm import tqdm
 import multiprocessing as mp
 import pickle
 from datetime import datetime
+
+import spacy
+nlp = spacy.load('en_core_web_sm')
+
+list_directory_root = '/media/abc-123/EDGAR'
+d = cmudict.dict()
+
+positive_word_list = []
+
+with open(os.path.join(list_directory_root, 'lm_positive'), 'r') as f:
+    for line in f:
+        positive_word_list.append(line.upper())
+
+negative_word_list = []
+
+with open(os.path.join(list_directory_root, 'lm_negative'), 'r') as f:
+    for line in f:
+        negative_word_list.append(line.upper())
+
+forward_word_list = []
+
+with open(os.path.join(list_directory_root, 'forward_looking'), 'r') as f:
+    for line in f:
+        forward_word_list.append(line.upper())
+
+earnings_word_list = []
+
+with open(os.path.join(list_directory_root, 'BVS_EARNINGS'), 'r') as f:
+    for line in f:
+        earnings_word_list.append(line.upper())
+
+
+def nsyl(word):
+    try:
+        syllable_count = [len(list( y for y in x if y[-1].isdigit())) for x in d[word.lower()]]
+        syllable_count = syllable_count[0]
+    except KeyError:
+        syllable_count = syllables(word)
+    return syllable_count
+
+def syllables(word):
+#referred from stackoverflow.com/questions/14541303/count-the-number-of-syllables-in-a-word
+    count = 0
+    vowels = 'aeiouy'
+    word = word.lower()
+    if word[0] in vowels:
+        count +=1
+    for index in range(1,len(word)):
+        if word[index] in vowels and word[index-1] not in vowels:
+            count +=1
+    if word.endswith('e'):
+        count -= 1
+    if word.endswith('le'):
+        count+=1
+    if count == 0:
+        count +=1
+    return count
+
+def detect_past_sentence(sentence):
+    sent = list(nlp(sentence).sents)[0]
+    return (
+        sent.root.tag_ == "VBD" or
+        any(w.dep_ == "aux" and w.tag_ == "VBD" for w in sent.root.children))
+
+def detect_future_sentence(sentence):
+    sent = list(nlp(sentence).sents)[0]
+    return (
+        sent.root.tag_ == "VBP" or
+        any(w.dep_ == "aux" and w.tag_ == "VBP" for w in sent.root.children))
+
+def determine_words(sentence_list, word_list):
+    number_of_words = 0
+    for sentence in sentence_list:
+        for word in sentence.split():
+            if word.upper() in word_list:
+                number_of_words += 1
+    return number_of_words
+
+def determine_sentences(sentence_list, word_list):
+    number_of_sentences = 0
+    for sentence in sentence_list:
+        for word in sentence.split():
+            if word.upper in word_list:
+                number_of_sentences += 1
+                break
+    return number_of_sentences
+
+
+def determine_sentence_negative_words(sentence):
+    pass
+
+def count_words_in_document(sentence_list):
+    number_of_words = 0
+    for sentence in sentence_list:
+        word_list = sentence.split()
+        number_of_words += len(word_list)
+    return number_of_words
+
+def parse_sentences(document):
+    sentences = []
+    for sentence in sent_tokenize(document):
+        #Remove sentences that have greater than 50% alpha-numeric characters
+        numofnumbers = len([i for i in sentence if i.isdigit() is True])
+        sentencelength = len(sentence)
+        if numofnumbers / sentencelength < .5:
+            sentences.append(sentence)
+
+    return sentences
+
+def _calculate_fog(sentences):
+    sentence_string = ''.join(sentences)
+    total_words = len(sentence_string.split())
+    average_words_per_sentence = total_words / len(sentences)
+    #Calculate the percentage of complex words within the document
+    complex_words = 0
+    for word in sentence_string:
+        if nsyl(word) > 2:
+            complex_words += 1
+
+    percentage_complex_words = 100 * (complex_words / total_words)
+    #calculate the FOG Score
+    document_fog = (.4 * (average_words_per_sentence + percentage_complex_words))
+
+    return document_fog
+
+#todo: turn into a class
+
+def count_sentences(document):
+    return len(parse_sentences(document))
+
+def detect_present_tense(document):
+    sentences = parse_sentences(document)
+    present_tense = 0
+    for sentence in sentences:
+        if detect_present_tense(sentence):
+            present_tense += 1
+    return present_tense
+
+def detect_past_tense(document):
+    sentences = parse_sentences(document)
+    past_tense = 0
+    for sentence in sentences:
+        if detect_past_sentence(sentence):
+            past_tense += 1
+    return past_tense
+
+def calculate_fog(document):
+    sentences = parse_sentences(document)
+    return _calculate_fog(sentences)
+
+def count_positive_words(document):
+    sentences = parse_sentences(document)
+    return determine_words(sentences, positive_word_list)
+
+def count_negative_words(document):
+    sentences = parse_sentences(document)
+    return determine_words(sentences, negative_word_list)
+
+def count_forward_looking_sentences(document):
+    sentences = parse_sentences(document)
+    return determine_sentences(sentences, forward_word_list)
+
+def count_earnings_sentences(document):
+    sentences = parse_sentences(document)
+    return determine_sentences(sentences, earnings_word_list)
+
+def count_words_in_document(document):
+    sentences = parse_sentences(document)
+    return count_words_in_document(sentences)
+
+def count_numeric_sentences(document):
+    sentences = parse_sentences(document)
+    number_of_numeric_sentences = 0
+    for sentence in sentences:
+        for word in sentence:
+            if word.isdigit():
+                number_of_numeric_sentences += 1
+                break
+    return number_of_numeric_sentences
 
 use_pickle = True
 use_pickle_article = True
@@ -65,6 +248,12 @@ class AutoVivication(dict):
             value = self[item] = type(self)()
             return value
 
+all_8k_headers = {}
+with open('/media/abc-123/EDGAR/ALL_8K_HEADER_INFO_2002_2019_RO.csv', 'r', errors='ignore') as all_8k_header_file:
+    reader = csv.DictReader(all_8k_header_file)
+    for line in reader:
+        all_8k_headers[line['ACCESSION NUMBER']] = line
+
 def find_articles(article):
     #print('spawned')
     year = article[0]
@@ -80,11 +269,65 @@ def find_articles(article):
                 article_2_location = os.path.join(parsed_articles_root_dir+article_2_candidate[1])
                 with open(article_2_location, 'r', errors='ignore') as article_2:
                     ordered_fieldnames_1 = OrderedDict(
-                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
+                        [('ACCESSION NUMBER', None), ('GVKEY', None), ('FDS', None), ('CUSIP', None), ('TICKER', None),
+                         ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
                          ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
                          ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
-                         ('TIMESTAMP DISTANCE', None)])
+                         ('TIMESTAMP DISTANCE', None),('ACCEPTANCE-DATETIME', None),	('CENTRAL INDEX KEY', None),
+                         ('CITY', None),	('COMPANY CONFORMED NAME', None),	('CONFORMED PERIOD OF REPORT', None),
+                         ('CONFORMED SUBMISSION TYPE', None),	('FILED AS OF DATE', None),	('FILENAME', None),	('FILING YEAR', None),
+                         ('FISCAL YEAR END', None),	('ITEM INFORMATION', None),	('LINK', None),	('PUBLIC DOCUMENT COUNT', None),
+                         ('STANDARD INDUSTRIAL CLASSIFICATION', None),	('STATE', None),	('STATE OF INCORPORATION', None),
+                         ('NEWS ARTICLE PRESENT SENTENCE COUNT', None), ('NEWS ARTICLE PAST SENTENCE COUNT', None),
+                         ('NEWS ARTICLE NUMERIC SENTENCE COUNT', None), ('NEWS ARTICLE EARNINGS SENTENCE COUNT', None),
+                         ('NEWS ARTICLE FORWARD LOOKING SENTENCE COUNT', None), ('NEWS ARTICLE TOTAL SENTENCE COUNT', None),
+                         ('EDGAR PRESENT SENTENCE COUNT', None), ('EDGAR PAST SENTENCE COUNT', None),
+                         ('EDGAR NUMERIC SENTENCE COUNT', None), ('EDGAR EARNINGS SENTENCE COUNT', None),
+                         ('EDGAR FORWARD LOOKING SENTENCE COUNT', None), ('EDGAR TOTAL SENTENCE COUNT', None),
+                         ('NEWS ARTICLE POSITIVE WORDS', None), ('NEWS ARTICLE NEGATIVE WORDS', None),
+                         ('NEWS ARTICLE TOTAL WORDS', None), ('NEWS ARTICLE FOG', None),
+                         ('EDGAR POSITIVE WORDS', None), ('EDGAR NEGATIVE WORDS', None),
+                         ('EDGAR TOTAL WORDS', None), ('EDGAR FOG', None),])
+
+                    identifying_fieldnames = article[1].split('_')
+
                     article_2_text = article_2.read()
+                    ordered_fieldnames_1['GVKEY'] = identifying_fieldnames[1]
+                    ordered_fieldnames_1['FDS'] = identifying_fieldnames[2]
+                    ordered_fieldnames_1['CUSIP'] = identifying_fieldnames[3]
+                    ordered_fieldnames_1['TICKER'] = identifying_fieldnames[4]
+                    try:
+                        ordered_fieldnames_1['NEWS ARTICLE PRESENT SENTENCE COUNT'] = detect_present_tense(article_1_text)
+                    except:
+                        ordered_fieldnames_1['NEWS ARTICLE PRESENT SENTENCE COUNT'] = '-99'
+                    try:
+                        ordered_fieldnames_1['EDGAR PRESENT SENTENCE COUNT'] = detect_present_tense(article_2_text)
+                    except:
+                        ordered_fieldnames_1['EDGAR PRESENT SENTENCE COUNT'] = '-99'
+                    try:
+                        ordered_fieldnames_1['NEWS ARTICLE PAST SENTENCE COUNT'] = detect_past_tense(article_1_text)
+                    except:
+                        ordered_fieldnames_1['NEWS ARTICLE PAST SENTENCE COUNT'] = '-99'
+                    try:
+                        ordered_fieldnames_1['EDGAR PAST SENTENCE COUNT'] = detect_past_tense(article_2_text)
+                    except:
+                        ordered_fieldnames_1['EDGAR PAST SENTENCE COUNT'] = '-99'
+                    ordered_fieldnames_1['NEWS ARTICLE TOTAL SENTENCE COUNT'] = count_sentences(article_1_text)
+                    ordered_fieldnames_1['EDGAR TOTAL SENTENCE COUNT'] = count_sentences(article_2_text)
+                    ordered_fieldnames_1['NEWS ARTICLE FORWARD LOOKING SENTENCE COUNT'] = count_forward_looking_sentences(article_1_text)
+                    ordered_fieldnames_1['EDGAR FORWARD LOOKING SENTENCE COUNT'] = count_forward_looking_sentences(article_2_text)
+                    ordered_fieldnames_1['NEWS ARTICLE EARNINGS SENTENCE COUNT'] = count_earnings_sentences(article_1_text)
+                    ordered_fieldnames_1['EDGAR EARNINGS SENTENCE COUNT'] = count_earnings_sentences(article_2_text)
+                    ordered_fieldnames_1['NEWS ARTICLE NUMERIC SENTENCE COUNT'] = count_numeric_sentences(article_1_text)
+                    ordered_fieldnames_1['EDGAR NUMERIC SENTENCE COUNT'] = count_numeric_sentences(article_1_text)
+                    ordered_fieldnames_1['NEWS ARTICLE FOG'] = calculate_fog(article_1_text)
+                    ordered_fieldnames_1['EDGAR FOG'] = calculate_fog(article_2_text)
+                    ordered_fieldnames_1['NEWS ARTICLE POSITIVE WORDS'] = count_positive_words(article_1_text)
+                    ordered_fieldnames_1['EDGAR POSITIVE WORDS'] = count_positive_words(article_2_text)
+                    ordered_fieldnames_1['NEWS ARTICLE NEGATIVE WORDS'] = count_negative_words(article_1_text)
+                    ordered_fieldnames_1['EDGAR NEGATIVE WORDS'] = count_negative_words(article_2_text)
+                    ordered_fieldnames_1['NEWS ARTICLE TOTAL WORDS'] = count_words_in_document(article_1_text)
+                    ordered_fieldnames_1['EDGAR TOTAL WORDS'] = count_words_in_document(article_2_text)
                     ordered_fieldnames_1['SIMSCORE COSINE'] = cosine_sim(article_1_text, article_2_text)
                     ordered_fieldnames_1['SIMSCORE JACCARD'] = jaccard_sim(article_1_text, article_2_text)
                     ordered_fieldnames_1['ACCESSION NUMBER'] = article_2_key
@@ -96,6 +339,23 @@ def find_articles(article):
                     ordered_fieldnames_1['ARTICLE TIMESTAMP'] = article[3]
                     ordered_fieldnames_1['EXHIBIT TIMESTAMP'] = article[4]
                     ordered_fieldnames_1['TIMESTAMP DISTANCE'] = article[5]
+                    ordered_fieldnames_1['ACCEPTANCE-DATETIME'] = all_8k_headers[article_2_key]['ACCEPTANCE-DATETIME']
+                    ordered_fieldnames_1['CENTRAL INDEX KEY'] = all_8k_headers[article_2_key]['CENTRAL INDEX KEY']
+                    ordered_fieldnames_1['CITY'] = all_8k_headers[article_2_key]['CITY']
+                    ordered_fieldnames_1['COMPANY CONFORMED NAME'] = all_8k_headers[article_2_key]['COMPANY CONFORMED NAME']
+                    ordered_fieldnames_1['CONFORMED PERIOD OF REPORT'] = all_8k_headers[article_2_key]['CONFORMED PERIOD OF REPORT']
+                    ordered_fieldnames_1['CONFORMED SUBMISSION TYPE'] = all_8k_headers[article_2_key]['CONFORMED SUBMISSION TYPE']
+                    ordered_fieldnames_1['FILED AS OF DATE'] = all_8k_headers[article_2_key]['FILED AS OF DATE']
+                    ordered_fieldnames_1['FILENAME'] = all_8k_headers[article_2_key]['FILENAME']
+                    ordered_fieldnames_1['FILING YEAR'] = all_8k_headers[article_2_key]['FILING YEAR']
+                    ordered_fieldnames_1['FISCAL YEAR END'] = all_8k_headers[article_2_key]['FISCAL YEAR END']
+                    ordered_fieldnames_1['ITEM INFORMATION'] = all_8k_headers[article_2_key]['ITEM INFORMATION']
+                    ordered_fieldnames_1['LINK'] = all_8k_headers[article_2_key]['LINK']
+                    ordered_fieldnames_1['PUBLIC DOCUMENT COUNT'] = all_8k_headers[article_2_key]['PUBLIC DOCUMENT COUNT']
+                    ordered_fieldnames_1['STANDARD INDUSTRIAL CLASSIFICATION'] = all_8k_headers[article_2_key]['STANDARD INDUSTRIAL CLASSIFICATION']
+                    ordered_fieldnames_1['STATE'] = all_8k_headers[article_2_key]['STATE']
+                    ordered_fieldnames_1['STATE OF INCORPORATION'] = all_8k_headers[article_2_key]['STATE OF INCORPORATION']
+
                     # with open(output_file, 'a', errors='ignore', newline='') as f:
                     #     writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
                     #     writer.writerow(ordered_fieldnames)
@@ -315,12 +575,14 @@ else:
                                     #changed this code -- we want to grab ALL articles that are 5 days or less 432000 seconds
                                     #if lowest > (d2-d1).total_seconds():
                                     if (d2-d1).total_seconds() <= 432000:
+                                        print((d2-d1).total_seconds())
+                                        seconds = (d2-d1).total_seconds()
                                         #lowest = (d2-d1).total_seconds()
                                         #change this in the future, horrible HORRIBLE code.
                                         #year, hand collected article filename, exhibit filename, hand collected article timestamp,
                                         #exhibit timestamp, distance between timestamps.
                                         #comment below out to grab closest article
-                                        articles = (article_year, article_values[1], value[0], article_values[0], value[1], lowest,
+                                        articles = (article_year, article_values[1], value[0], article_values[0], value[1], seconds,
                                                     EDGAR_filing_year)
                                         articles_to_compare.append(articles)
 
@@ -340,11 +602,27 @@ counter = 1
 while os.path.isfile(output_file):
     output_file = os.path.join('/media/abc-123/EDGAR/simscore_'+str(counter)+'.csv')
     counter += 1
-ordered_fieldnames = OrderedDict(
-                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
-                         ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
-                         ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
-                         ('TIMESTAMP DISTANCE', None)])
+    ordered_fieldnames = OrderedDict(
+        [('ACCESSION NUMBER', None), ('GVKEY', None), ('FDS', None), ('CUSIP', None), ('TICKER', None),
+         ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
+         ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
+         ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
+         ('TIMESTAMP DISTANCE', None), ('ACCEPTANCE-DATETIME', None), ('CENTRAL INDEX KEY', None),
+         ('CITY', None), ('COMPANY CONFORMED NAME', None), ('CONFORMED PERIOD OF REPORT', None),
+         ('CONFORMED SUBMISSION TYPE', None), ('FILED AS OF DATE', None), ('FILENAME', None), ('FILING YEAR', None),
+         ('FISCAL YEAR END', None), ('ITEM INFORMATION', None), ('LINK', None), ('PUBLIC DOCUMENT COUNT', None),
+         ('STANDARD INDUSTRIAL CLASSIFICATION', None), ('STATE', None), ('STATE OF INCORPORATION', None),
+         ('NEWS ARTICLE PRESENT SENTENCE COUNT', None), ('NEWS ARTICLE PAST SENTENCE COUNT', None),
+         ('NEWS ARTICLE NUMERIC SENTENCE COUNT', None), ('NEWS ARTICLE EARNINGS SENTENCE COUNT', None),
+         ('NEWS ARTICLE FORWARD LOOKING SENTENCE COUNT', None), ('NEWS ARTICLE TOTAL SENTENCE COUNT', None),
+         ('EDGAR PRESENT SENTENCE COUNT', None), ('EDGAR PAST SENTENCE COUNT', None),
+         ('EDGAR NUMERIC SENTENCE COUNT', None), ('EDGAR EARNINGS SENTENCE COUNT', None),
+         ('EDGAR FORWARD LOOKING SENTENCE COUNT', None), ('EDGAR TOTAL SENTENCE COUNT', None),
+         ('NEWS ARTICLE POSITIVE WORDS', None), ('NEWS ARTICLE NEGATIVE WORDS', None),
+         ('NEWS ARTICLE TOTAL WORDS', None), ('NEWS ARTICLE FOG', None),
+         ('EDGAR POSITIVE WORDS', None), ('EDGAR NEGATIVE WORDS', None),
+         ('EDGAR TOTAL WORDS', None), ('EDGAR FOG', None), ])
+
 with open(output_file, 'w', errors='ignore', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
     writer.writeheader()

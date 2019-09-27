@@ -22,10 +22,10 @@ if __name__ == '__main__':
         try:
             if 'Results' in header_dict.get(accession_number).get('ITEM INFORMATION'):
                 with open(filename, 'r', errors='ignore') as g:
-                    parser.output_location = os.path.join('/home/abc-123/EDGAR/8K_Output/', header_dict[accession_number]['FILING YEAR'])
+                    parser.output_location = os.path.join('/home/abc-123/EDGAR/8K_Output_2/', header_dict[accession_number]['FILING YEAR'])
                     g.seek(0)
                     parser.new_document(g.read())
-                    parser.save_documents('99', ('ex99', 'EX99', 'ex-99', 'EX-99'),
+                    parser.save_documents('99', ('ex99', 'EX99', 'ex-99', 'EX-99', '99_1', '991',),
                                           filename=header_dict[accession_number]['ACCESSION NUMBER'], expanded_search=True)
         except AttributeError:
             return
@@ -41,12 +41,7 @@ if __name__ == '__main__':
     file_locations = []
     for root, dir, files in os.walk(root_dir, topdown=True):
         for file in files:
-            if '2017' in root:
-                continue
-            elif '2018' in root:
-                continue
-            else:
-                file_locations.append(os.path.join(root_dir, root, file))
+            file_locations.append(os.path.join(root_dir, root, file))
 
     pool.map(write_files, file_locations)
             # with open(os.path.join(root_dir, root, file), errors='ignore') as f:

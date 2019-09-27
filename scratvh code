@@ -1,0 +1,9 @@
+ordered_fieldnames = OrderedDict(
+                        [('ACCESSION NUMBER', None), ('ARTICLE FILENAME', None), ('EXHIBIT FILENAME', None), ('SIMSCORE COSINE', None),
+                         ('SIMSCORE JACCARD', None), ('EXHIBIT NAME', None), ('INTERNAL ARTICLE FILENAME', None),
+                         ('INTERNAL EXHIBIT FILENAME', None), ('ARTICLE TIMESTAMP', None), ('EXHIBIT TIMESTAMP', None),
+                         ('TIMESTAMP DISTANCE', None),('ACCEPTANCE-DATETIME', None),	('CENTRAL INDEX KEY', None),
+                         ('CITY', None),	('COMPANY CONFORMED NAME', None),	('CONFORMED PERIOD OF REPORT', None),
+                         ('CONFORMED SUBMISSION TYPE', None),	('FILED AS OF DATE', None),	('FILENAME', None),	('FILING YEAR', None),
+                         ('FISCAL YEAR END', None),	('ITEM INFORMATION', None),	('LINK', None),	('PUBLIC DOCUMENT COUNT', None),
+                         ('STANDARD INDUSTRIAL CLASSIFICATION', None),	('STATE', None),	('STATE OF INCORPORATION', None)])
