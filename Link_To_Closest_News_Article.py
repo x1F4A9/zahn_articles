@@ -18,7 +18,7 @@ use_pickle_article = True
 
 #local imports
 import data_labels
-from linguistic_tools import brancher, parse_sentences
+from linguistic_tools import branching, parse_sentences
 import document_cleaning_tools
 
 # import spacy
@@ -55,9 +55,15 @@ def return_blank_ordered_dictionary():
 
 
 
-def public_doc_count_check(doc_count, value):
-    if int(doc_count) < value:
-        return False
+def public_doc_count_check(doc_count, value, exact_value = True):
+    if exact_value:
+        if int(doc_count) < value:
+            return True
+        if int(doc_count) > value:
+            return True
+    else:
+        if int(doc_count) < value:
+            return False
 
 
 def remove_tables(soup_text, max_percent_numbes_in_tables):
@@ -105,6 +111,9 @@ def find_articles(article):
                 edgar_article_location = os.path.join(parsed_articles_root_dir+edgar_article_candidate[1])
                 with open(edgar_article_location, 'r', errors='ignore') as edgar_article:
                     #todo: create ordered_fieldnames class to declutter code
+                    #done
+                    # if all_8k_headers[edgar_article_key]['LINK'] != 'http://www.sec.gov/Archives/edgar/data/794367/000079436710000154/es8k08112010.htm':
+                    #     continue
                     ordered_fieldnames_1 = return_blank_ordered_dictionary()
                     identifying_fieldnames = article[1].split('_')
 
@@ -122,9 +131,22 @@ def find_articles(article):
 
                     edgar_article_sentences = parse_sentences(edgar_article_text)
                     news_article_sentences = parse_sentences(news_article_text)
-
+                    edgar_branching_obj = branching()
+                    news_branching_obj = branching()
                     for label in data_labels.label_headers:
-                        ordered_fieldnames_1[label] = brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
+                        if 'EDGAR' in label:
+                            a = edgar_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
+                            if a or a == 0:
+                                ordered_fieldnames_1[label] = a
+                            else:
+                                ordered_fieldnames_1[label] = '-99'
+                        elif 'NEWS_ARTICLE' in label:
+                            a = news_branching_obj.brancher(label, news_article_text, edgar_article_text,
+                                                             news_article_sentences, edgar_article_sentences)
+                            if a or a == 0:
+                                ordered_fieldnames_1[label] = a
+                            else:
+                                ordered_fieldnames_1[label] = '-99'
                     ordered_fieldnames_1['GVKEY'] = identifying_fieldnames[1]
                     ordered_fieldnames_1['FDS'] = identifying_fieldnames[2]
                     ordered_fieldnames_1['CUSIP'] = identifying_fieldnames[3]
@@ -507,7 +529,7 @@ def worker(arg, q):
 
 
 def mp_handler():
-    pool = mp.Pool(mp.cpu_count() - 1)
+    pool = mp.Pool(mp.cpu_count() - 3)
     counter = 1
     ordered_fieldnames_headers = return_blank_ordered_dictionary()
     output_file = '/media/abc-123/EDGAR/simscore_after.csv'
@@ -523,7 +545,7 @@ def mp_handler():
 
             writer = csv.DictWriter(csv_l, fieldnames=return_blank_ordered_dictionary().keys())
             writer.writeheader()
-            for header_data in pool.imap(find_articles, tqdm(articles_to_compare), 4):
+            for header_data in pool.imap(find_articles, tqdm(articles_to_compare), 8):
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
                 if header_data[0]:
                     #print(header_data[1])

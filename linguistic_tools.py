@@ -5,6 +5,7 @@ nltk.download('punkt')
 from nltk.tokenize import sent_tokenize
 from nltk.corpus import cmudict
 from nltk import word_tokenize, pos_tag
+from nltk.parse import CoreNLPParser
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 tense_tags = {
@@ -21,7 +22,14 @@ d = cmudict.dict()
 positive_word_list = []
 
 
-#data labels -- add all labels here ONLY
+#local preloading functions/tasks
+nltk.download('punkt') # if necessary...
+
+
+stemmer = nltk.stem.porter.PorterStemmer()
+remove_punctuation_map = dict((ord(char), None) for char in string.punctuation)
+
+stemming_dictionary = {}
 
 
 #END OF FILES TO SKIP
@@ -89,7 +97,7 @@ def _detect_tense(tagged_words, tags):
         return True
     return False
 
-def _detect_sentence_tense(sentence, tense, modal = False):
+def _detect_sentence_tense(sentence, tense, modal = False, nonmodal = False):
     """
     Detects the tense of a sentence
     :param sentence: A sentence of string type
@@ -99,11 +107,35 @@ def _detect_sentence_tense(sentence, tense, modal = False):
     """
     text = get_words(sentence)
     tagged_words = pos_tag(text)
+    #if modal flag
     if modal:
-        if _detect_tense(tagged_words, tense_tags[tense]):
+        #if tense is present, check for both modal AND tense
+        if tense:
+            if _detect_tense(tagged_words, tense_tags[tense]):
+                if _detect_tense(tagged_words, tense_tags['MODAL']):
+                    return True
+                else:
+                    return False
+        #otherwise just check for modal
+        else:
             if _detect_tense(tagged_words, tense_tags['MODAL']):
                 return True
-        return False
+            else:
+                return False
+    #same as above, but for nonmodal
+    if nonmodal:
+        if tense:
+            if _detect_tense(tagged_words, tense_tags[tense]):
+                if _detect_tense(tagged_words, tense_tags['MODAL']):
+                    return False
+                else:
+                    return True
+        else:
+            if _detect_tense(tagged_words, tense_tags['MODAL']):
+                return False
+            else:
+                return True
+
     else:
         if _detect_tense(tagged_words, tense_tags[tense]):
             return True
@@ -124,7 +156,7 @@ def determine_words(sentence_list, word_list):
                 number_of_words += 1
     return number_of_words
 
-def determine_sentences(sentence_list, word_list):
+def determine_sentences(sentence_list, word_list, *wordlists):
     """
     Determines if a sentence contains a word in the wordlist
     Requires nltk get_words function
@@ -133,11 +165,27 @@ def determine_sentences(sentence_list, word_list):
     :return: Number of sentences that contain any word in the wordlist
     """
     number_of_sentences = 0
-    for sentence in sentence_list:
-        for word in get_words(sentence):
-            if word.upper().rstrip() in word_list:
-                number_of_sentences += 1
-                break
+    if wordlists:
+        wordlists, *dump = wordlists
+    if wordlists:
+        for sentence in sentence_list:
+            for word in get_words(sentence):
+                multiple_wordlist_flag = False
+                if word.upper().rstrip() in word_list:
+                    for wordlist in wordlists:
+                        if word.upper().rstrip() in wordlist:
+                            multiple_wordlist_flag = True
+                        else:
+                            multiple_wordlist_flag = False
+                            break
+                if multiple_wordlist_flag:
+                    number_of_sentences += 1
+    else:
+        for sentence in sentence_list:
+            for word in get_words(sentence):
+                if word.upper().rstrip() in word_list:
+                    number_of_sentences += 1
+                    break
     return number_of_sentences
 
 
@@ -238,7 +286,7 @@ def _scan_modal(type):
     else:
         return False
 
-def detect_sentence(sentences, type, modal = False, use_data_label_for_tense = True):
+def detect_sentence(sentences, type, modal = False, nonmodal = False, use_data_label_for_tense = True):
     """
     Flexible function that identifies the tense and modal quality of a sentence. Can use the data label for loops! Fails cleanly.
     If there is no tense found then nothing will be returned
@@ -257,8 +305,25 @@ def detect_sentence(sentences, type, modal = False, use_data_label_for_tense = T
         modal = _scan_modal(type)
     else:
         tense = type
-    if tense is None:
+
+    #modal sentences only
+    if tense is None and nonmodal:
+        for sentence in sentences:
+            if _detect_sentence_tense(sentence, tense, nonmodal=True):
+                sentence_count += 1
+                sentence_list.append(sentence)
+        return (sentence_count, sentence_list)
+    elif tense is None and modal:
+        for sentence in sentences:
+            if _detect_sentence_tense(sentence, False, modal=modal):
+                sentence_count += 1
+                sentence_list.append(sentence)
+        return (sentence_count, sentence_list)
         return False
+
+    #nonmodal past/present sentences
+
+    #detect tense
     for sentence in sentences:
         if _detect_sentence_tense(sentence, tense, modal=modal):
             sentence_count += 1
@@ -274,36 +339,51 @@ def count_positive_words(sentences):
 def count_negative_words(sentences):
     return determine_words(sentences, negative_word_list)
 
-def count_earnings_sentences(sentences):
-    return determine_sentences(sentences, earnings_word_list)
+def count_earnings_sentences(sentences, *args):
+    return determine_sentences(sentences, earnings_word_list, args)
 
-def count_positive_sentences(sentences):
-    return determine_sentences(sentences, positive_word_list)
+def count_positive_sentences(sentences, *args):
+    return determine_sentences(sentences, positive_word_list, args)
 
-def count_negative_sentences(sentences):
-    return determine_sentences(sentences, negative_word_list)
+def count_forward_looking_sentences(sentences, *args):
+    return determine_sentences(sentences, forward_word_list, args)
+
+def count_negative_sentences(sentences, *args):
+    return determine_sentences(sentences, negative_word_list, args)
 
 def count_words_in_document(sentences):
     return _count_words(sentences)
 
-def count_numeric_sentences(sentences):
-    number_of_numeric_sentences = 0
-    for sentence in sentences:
-        for word in sentence:
-            if word.isdigit():
-                number_of_numeric_sentences += 1
-                break
-    return number_of_numeric_sentences
+def count_numeric_sentences(sentences, *wordlists):
+    number_of_sentences = 0
+    #(()) is false
+    #((),) is true
+    #the tuple passed creates the second situation
+    if wordlists:
+        wordlists, *dump = wordlists
+    if wordlists:
+        for sentence in sentences:
+            multiple_wordlist_flag = False
+            numeric_flag = False
+            for word in get_words(sentence):
+                if word.isdigit():
+                    numeric_flag = True
+                for wordlist in wordlists:
+                    if word.upper().rstrip() in wordlist:
+                        multiple_wordlist_flag = True
+                    else:
+                        multiple_wordlist_flag = False
+                        break
+            if multiple_wordlist_flag and numeric_flag:
+                    number_of_sentences += 1
+    else:
+        for sentence in sentences:
+            for word in get_words(sentence):
+                if word.isdigit():
+                    number_of_sentences += 1
+                    break
+    return number_of_sentences
 
-
-
-nltk.download('punkt') # if necessary...
-
-
-stemmer = nltk.stem.porter.PorterStemmer()
-remove_punctuation_map = dict((ord(char), None) for char in string.punctuation)
-
-stemming_dictionary = {}
 
 def stem_tokens(tokens):
     # ret_list = []
@@ -339,13 +419,19 @@ def jaccard_sim(text1,text2):
 
 class branching(object):
     def __init__(self):
-        self.future_sentences = False
         self.present_sentences = False
         self.past_sentences = False
         self.modal_sentences = False
-        self.future_modal_sentences = False
         self.present_modal_sentences = False
         self.past_modal_sentences = False
+        self.past_nonmodal_sentences = False
+        self.nonmodal_sentences = False
+        self.present_nonmodal_sentences = False
+        self.present_sentences_count = False
+        self.past_sentences_count = False
+        self.modal_sentences_count = False
+        self.present_modal_sentences_count = False
+        self.past_modal_sentences_count = False
 
     def brancher(self, label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences, **kwargs):
         """
@@ -362,6 +448,7 @@ class branching(object):
         #set the variables to the correct values given the label
         sentences = None
         text = None
+        number_of_sentences = None
         if 'EDGAR_' in label:
             sentences = edgar_article_sentences
             text = edgar_article_text
@@ -378,40 +465,87 @@ class branching(object):
         elif '_POSITIVE_WORDS' in label:
             return count_positive_words(sentences)
         #sentence level measurements
+        #TODO: Refactor this
         elif '_SENTENCE_' in label:
             tense = _scan_tense_type(label)
             modal = _scan_modal(label)
+            nonmodal = False
+            if 'NONMODAL' in label:
+                nonmodal = True
+            #basic model. Sentences can have multiple tenses! (complex sentences)
             if modal:
                 if tense == 'PAST':
                     if not self.past_modal_sentences:
-                        self.past_modal_sentences = detect_sentence(sentences, label)
+                        self.past_modal_sentences = detect_sentence(sentences, label, modal=modal)
+                    sentences = self.past_modal_sentences[1]
+                    #print(sentences)
+                    number_of_sentences = self.past_modal_sentences[0]
                 elif tense == 'PRESENT':
                     if not self.present_modal_sentences:
-                        self.present_modal_sentences = detect_sentence(sentences, label)
-                elif tense == 'FUTURE':
-                    if not self.future_modal_sentences:
-                        self.future_modal_sentences = detect_sentence(sentences, label)
+                        self.present_modal_sentences = detect_sentence(sentences, label, modal=modal)
+                    sentences = self.present_modal_sentences[1]
+                    #print(sentences)
+                    number_of_sentences = self.present_modal_sentences[0]
+                else:
+                    if not self.modal_sentences:
+                        self.modal_sentences = detect_sentence(sentences, label, modal=modal)
+                    sentences = self.modal_sentences[1]
+                    #print(sentences)
+                    number_of_sentences = self.modal_sentences[0]
+            elif nonmodal:
+                if tense == 'PAST':
+                    if not self.past_nonmodal_sentences:
+                        self.past_nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
+                    sentences = self.past_nonmodal_sentences[1]
+                    number_of_sentences = self.past_nonmodal_sentences[0]
+                if tense == 'PRESENT':
+                    if not self.present_nonmodal_sentences:
+                        self.present_nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
+                    sentences = self.present_nonmodal_sentences[1]
+                    number_of_sentences = self.present_nonmodal_sentences[0]
+                else:
+                    if not self.nonmodal_sentences:
+                        self.nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
+                    sentences = self.nonmodal_sentences[1]
+                    number_of_sentences = self.nonmodal_sentences[0]
             else:
                 if tense == 'PAST':
                     if not self.past_sentences:
                         self.past_sentences = detect_sentence(sentences, label)
+                    sentences = self.past_sentences[1]
+                    number_of_sentences = self.past_sentences[0]
+                if tense == 'PRESENT':
                     if not self.present_sentences:
                         self.present_sentences = detect_sentence(sentences, label)
-                    if not self.future_sentences:
-                        self.future_sentences = detect_sentence(sentences, label)
+                    sentences = self.present_sentences[1]
+                    number_of_sentences = self.present_sentences[0]
 
-            tense_return_values_tuple = detect_sentence(sentences, label)
-            if tense_return_values_tuple:
-                sentences = tense_return_values_tuple[1]
-                number_of_sentences = tense_return_values_tuple[0]
-                if '_EARNINGS_' in label:
-                    return count_earnings_sentences(sentences)
-                elif '_POSITIVE_' in label:
-                    return count_positive_sentences(sentences)
-                elif '_NEGATIVE_' in label:
-                    return count_negative_sentences(sentences)
+            if '_EARNINGS_' in label:
+                if '_FORWARD_' in label:
+                    return count_forward_looking_sentences(sentences, earnings_word_list)
                 else:
-                    return number_of_sentences
+                    return count_earnings_sentences(sentences)
+            elif '_POSITIVE_' in label:
+                if '_FORWARD_' in label:
+                    return count_forward_looking_sentences(sentences, positive_word_list)
+                else:
+                    return count_positive_sentences(sentences)
+            elif '_NEGATIVE_' in label:
+                if '_FORWARD_' in label:
+                    return count_forward_looking_sentences(sentences, negative_word_list)
+                else:
+                    return count_negative_sentences(sentences)
+            elif '_FORWARD_' in label:
+                if '_NUMERIC_' in label:
+                    return count_numeric_sentences(sentences, forward_word_list)
+                else:
+                    return count_forward_looking_sentences(sentences)
+            elif '_TOTAL_' in label:
+                return count_sentences(sentences)
+            elif '_NUMERIC_' in label:
+                return count_numeric_sentences(sentences)
+            else:
+                return number_of_sentences
         #default value
         else:
             return '-99'
