@@ -2,15 +2,22 @@ import csv
 import math
 import os
 import nltk
+import sys
 nltk.download('cmudict')
 nltk.download('punkt')
+from concurrent import futures
+import traceback
 from collections import OrderedDict
 from tqdm import tqdm
 import multiprocessing as mp
+import logging
 import pickle
 from datetime import datetime
 from bs4 import BeautifulSoup
 
+#logging for debugging purposes
+# mpl = mp.log_to_stderr()
+# mpl.setLevel(logging.DEBUG)
 
 #pickle variables -- saves processing
 use_pickle = True
@@ -116,7 +123,7 @@ def find_articles(article):
                     #     continue
                     ordered_fieldnames_1 = return_blank_ordered_dictionary()
                     identifying_fieldnames = article[1].split('_')
-
+                    #
                     edgar_article_text = edgar_article.read()
                     soup = BeautifulSoup(edgar_article_text, "lxml")
                     #keep some tables -- they will be removed by the sentence parser if its pure numbers
@@ -133,8 +140,15 @@ def find_articles(article):
                     news_article_sentences = parse_sentences(news_article_text)
                     edgar_branching_obj = branching()
                     news_branching_obj = branching()
+                    simscore_branching_obj = branching()
                     for label in data_labels.label_headers:
-                        if 'EDGAR' in label:
+                        if 'SIMSCORE_' in label:
+                            a = simscore_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
+                            if a or a == 0:
+                                ordered_fieldnames_1[label] = a
+                            else:
+                                ordered_fieldnames_1[label] = '-99'
+                        elif 'EDGAR' in label:
                             a = edgar_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
                             if a or a == 0:
                                 ordered_fieldnames_1[label] = a
@@ -202,7 +216,8 @@ def find_articles(article):
 
 
 #create articles list
-articles_root = os.path.join('/media/abc-123/EDGAR/Zahn/Output_2')
+articles_root = os.path.join('/media/abc-123/M2/Zahn/Output_2')
+#articles_root = os.path.join('/media/abc-123/EDGAR/Zahn/Output_2')
 
 articles = os.listdir(articles_root)
 
@@ -319,7 +334,8 @@ else:
 #4) report both results
 
 parsed_articles_dict = {}
-parsed_articles_root_dir = '/media/abc-123/EDGAR/8K_Output'
+parsed_articles_root_dir = '/media/abc-123/M2/8K_Output'
+#parsed_articles_root_dir = '/media/abc-123/EDGAR/8K_Output'
 if use_pickle:
     parsed_articles_dict = pickle.load(open('parsed_articles_dict.pickle', 'rb'))
 else:
@@ -447,7 +463,7 @@ counter = 1
 # with open(output_file, 'w', errors='ignore', newline='') as f:
 #     writer = csv.DictWriter(f, fieldnames=ordered_fieldnames)
 #     writer.writeheader()
-counter = 0
+#counter = 0
 # pool = mp.Pool(mp.cpu_count() - 2)
 # results = []
 
@@ -455,11 +471,7 @@ counter = 0
 #articles_to_compare = articles_to_compare[1:100]
 
 
-def worker(arg, q):
-    '''main process'''
-    res = find_articles(arg)
-    q.put(res)
-    return res
+
 
 #write everything asyncronously
 #The listener WILL SILENTLY CRASH. IF THERE IS NOTHING WRITTEN, THEN THE LISTENER CRASHED! BAD BAD BAD!
@@ -528,44 +540,85 @@ def worker(arg, q):
                     # csv_l.flush()
 
 
+
+# def mp_handler_exceptions(*args, **kwargs):
+#     try:
+#         mp_handler(*args,**kwargs)
+#     except (KeyboardInterrupt, SystemExit):
+#         raise
+#     except:
+#         traceback.print_exec(file=sys.stdout)
+#
+#
+# def init_globals(counter):
+#     global _COUNTER
+#     _COUNTER = counter
+
+
 def mp_handler():
-    pool = mp.Pool(mp.cpu_count() - 3)
-    counter = 1
-    ordered_fieldnames_headers = return_blank_ordered_dictionary()
+    #pool = mp.Pool(mp.cpu_count()-2)
+    #counter = mp.Value('i', 0)
+    counter_main_file = 1
+    #ordered_fieldnames_headers = return_blank_ordered_dictionary()
     output_file = '/media/abc-123/EDGAR/simscore_after.csv'
     while os.path.isfile(output_file):
-        output_file = os.path.join('/media/abc-123/EDGAR/simscore_' + str(counter) + '.csv')
-        counter += 1
+        output_file = os.path.join('/media/abc-123/EDGAR/simscore_' + str(counter_main_file) + '.csv')
+        counter_main_file += 1
 
 
 
     with open('/media/abc-123/EDGAR/multiple_files.txt', 'w', errors='ignore', encoding='UTF-8') as multiple_l:
         with open(output_file, 'w', newline='', errors="ignore", encoding='UTF-8') as csv_l:
-            # write headers
-
+            #write headers
             writer = csv.DictWriter(csv_l, fieldnames=return_blank_ordered_dictionary().keys())
             writer.writeheader()
-            for header_data in pool.imap(find_articles, tqdm(articles_to_compare), 8):
+            #for header_data in pool.imap(find_articles, tqdm(articles_to_compare),8):
+            #much better way when compared with
+            with futures.ProcessPoolExecutor(max_workers = mp.cpu_count()-2) as executor:
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
-                if header_data[0]:
-                    #print(header_data[1])
-                    #header_data returns a list of ordered dicts. Iterate through each one then write
-                    for l_val in header_data[1]:
-                        # print('first loop')
-                        # print(l_val)
-                        if l_val:
-                            # print('writing')
-                            writer.writerow(l_val)
-                            #print('writing')
-                            csv_l.flush()
-                            #print('flush')
-                else:
-                    multiple_l.write("{} -- {}\n".format(header_data[1][1], header_data[1][2]))
-                    multiple_l.flush()
-                    #print(header_data[1][2])
+                #need to iterate the list to submit!
+                start = 70000+2000
+                #start = 6292+1274+540+1404+2150+5482+715+1965
+                running = {executor.submit(find_articles, article): article for article in tqdm(articles_to_compare[50000:start])}
+                #please work -- if it does this will TAKE the results one by one as they are released and write to the file.
+                #please work :(
+                for result in futures.as_completed(running):
+                   filename = running[result][1]
+                   #print('in results')
+
+                   header_data = result.result()
+                       # print('%r generated an exception : %s' % (filename, exc))
+                       # header_data = (False, False)
+                   a = 1
+                   if header_data[0]:
+                        #print(header_data[1])
+                        #header_data returns a list of ordered dicts. Iterate through each one then write
+                        for l_val in header_data[1]:
+                            # print('first loop')
+                            # print(l_val)
+                            if l_val:
+                                #print(l_val)
+                                #print('writing')
+                                writer.writerow(l_val)
+                                #print('writing')
+                                #print('flush')
+                   else:
+                       pass
+                        # multiple_l.write("{} -- {}\n".format(header_data[1][1], header_data[1][2]))
+                        # multiple_l.flush()
+            # print('MULTIPLE_L {}'.format(header_data[1][2]))
+            #csv_l.flush()
 
 
 
+# def worker(arg, q):
+#     '''main process'''
+#     res = find_articles(arg)
+#     q.put(res)
+#     return res
+
+
+#
 # def main():
 #     #must use Manager queue here, or will not work
 #     #manager locks the file and creates a queue
