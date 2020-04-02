@@ -1,5 +1,6 @@
 import os
 import nltk, string
+import re
 nltk.download('cmudict')
 nltk.download('punkt')
 from nltk.tokenize import sent_tokenize
@@ -21,6 +22,11 @@ d = cmudict.dict()
 
 positive_word_list = []
 
+quantitative_symbols = re.compile(r'[$%]')
+quantitative_numbers = re.compile(r'\d\s*(K|M|B|MM)\b', re.I)
+quantitative_words = re.compile(r'\b(cent|dollar|thousand|million|billion)\b', re.I)
+
+regex_list = (quantitative_words, quantitative_symbols, quantitative_numbers)
 
 #local preloading functions/tasks
 nltk.download('punkt') # if necessary...
@@ -55,6 +61,7 @@ earnings_word_list = []
 with open(os.path.join(list_directory_root, 'BVS_EARNINGS.txt'), 'r') as f:
     for line in f:
         earnings_word_list.append(line.upper().rstrip())
+
 
 
 def nsyl(word):
@@ -156,7 +163,29 @@ def determine_words(sentence_list, word_list):
                 number_of_words += 1
     return number_of_words
 
-def determine_sentences(sentence_list, word_list, *wordlists):
+def regex_search(sentence, regex_searches=None):
+    for regex in regex_searches:
+        if regex.search(sentence):
+            return True
+    return False
+
+
+
+def word_list_search(sentence, wordlists=None):
+    wordlist_flag = False
+    for wordlist in wordlists:
+        wordlist_flag = False
+        #reset wordlist flag after each iteration -- if the word is found then it will be true at the end, no matter what
+        for word in get_words(sentence):
+            if word.upper().rstrip() in wordlist:
+                wordlist_flag = True
+                break
+    if wordlist_flag:
+        return True
+    return False
+
+
+def determine_sentences(sentence_list, **kwargs):
     """
     Determines if a sentence contains a word in the wordlist
     Requires nltk get_words function
@@ -164,28 +193,22 @@ def determine_sentences(sentence_list, word_list, *wordlists):
     :param word_list: List of words to identify
     :return: Number of sentences that contain any word in the wordlist
     """
+    wordlists = kwargs.get('wordlist')
+    regex = kwargs.get('regex')
     number_of_sentences = 0
-    if wordlists:
-        wordlists, *dump = wordlists
-    if wordlists:
-        for sentence in sentence_list:
-            for word in get_words(sentence):
-                multiple_wordlist_flag = False
-                if word.upper().rstrip() in word_list:
-                    for wordlist in wordlists:
-                        if word.upper().rstrip() in wordlist:
-                            multiple_wordlist_flag = True
-                        else:
-                            multiple_wordlist_flag = False
-                            break
-                if multiple_wordlist_flag:
-                    number_of_sentences += 1
-    else:
-        for sentence in sentence_list:
-            for word in get_words(sentence):
-                if word.upper().rstrip() in word_list:
-                    number_of_sentences += 1
-                    break
+    wordlist_flag = True
+    regex_flag = True
+    for sentence in sentence_list:
+        if wordlists:
+            wordlist_flag = False
+            if word_list_search(sentence, wordlists=wordlists):
+                wordlist_flag = True
+        if regex:
+            regex_flag = False
+            if regex_search(sentence, regex_searches=regex):
+                regex_flag = True
+        if wordlist_flag and regex_flag:
+            number_of_sentences += 1
     return number_of_sentences
 
 
@@ -368,20 +391,11 @@ def count_positive_words(sentences):
 def count_negative_words(sentences):
     return determine_words(sentences, negative_word_list)
 
-def count_earnings_sentences(sentences, *args):
-    return determine_sentences(sentences, earnings_word_list, args)
-
-def count_positive_sentences(sentences, *args):
-    return determine_sentences(sentences, positive_word_list, args)
-
-def count_forward_looking_sentences(sentences, *args):
-    return determine_sentences(sentences, forward_word_list, args)
-
-def count_negative_sentences(sentences, *args):
-    return determine_sentences(sentences, negative_word_list, args)
-
 def count_words_in_document(sentences):
     return _count_words(sentences)
+
+def count_wordlist_sentences(sentences, wordlist=None, regex=None):
+    return determine_sentences(sentences, wordlist=wordlist, regex=regex)
 
 def count_numeric_sentences(sentences, *wordlists):
     number_of_sentences = 0
@@ -565,36 +579,62 @@ class branching(object):
                     sentences = self.present_sentences[1]
                     number_of_sentences = self.present_sentences[0]
 
-            if '_EARNINGS_' in label:
+            if '_EARNINGS_' in label and '_QUANTITATIVE_' in label:
+                wordlist = [earnings_word_list]
                 if '_FORWARD_' in label:
-                    return count_forward_looking_sentences(sentences, earnings_word_list)
+                    wordlist.append(forward_word_list)
                 elif '_NUMERIC_' in label:
                     return count_numeric_sentences(sentences, earnings_word_list)
                 elif '_POSITIVE_' in label:
-                    return count_positive_sentences(sentences, positive_word_list)
+                    wordlist.append(positive_word_list)
                 elif '_NEGATIVE_' in label:
-                    return count_negative_sentences(sentences, negative_word_list)
-                else:
-                    return count_earnings_sentences(sentences)
-            elif '_POSITIVE_' in label:
+                    wordlist.append(negative_word_list)
+                return count_wordlist_sentences(sentences, wordlist=wordlist, regex=regex_list)
+
+            elif '_EARNINGS_' in label and '_QUANTITATIVE_' not in label:
+                wordlist = [earnings_word_list]
                 if '_FORWARD_' in label:
-                    return count_forward_looking_sentences(sentences, positive_word_list)
+                    wordlist.append(forward_word_list)
+                elif '_NUMERIC_' in label:
+                    return count_numeric_sentences(sentences, earnings_word_list)
+                elif '_POSITIVE_' in label:
+                    wordlist.append(positive_word_list)
+                elif '_NEGATIVE_' in label:
+                    wordlist.append(negative_word_list)
+                return count_wordlist_sentences(sentences, wordlist=wordlist)
+
+            elif '_QUANTITATIVE_' in label:
+                wordlist = []
+                if '_FORWARD_' in label:
+                    wordlist.append(forward_word_list)
+                elif '_POSITIVE_' in label:
+                    wordlist.append(positive_word_list)
+                elif '_NEGATIVE_' in label:
+                    wordlist.append(negative_word_list)
+                return count_wordlist_sentences(sentences, wordlist=wordlist, regex=regex_list)
+
+            elif '_POSITIVE_' in label:
+                wordlist = [positive_word_list]
+                if '_FORWARD_' in label:
+                    wordlist.append(forward_word_list)
                 elif '_NUMERIC_' in label:
                     return count_numeric_sentences(sentences, positive_word_list)
-                else:
-                    return count_positive_sentences(sentences)
+                return count_wordlist_sentences(sentences, wordlist=wordlist)
+
             elif '_NEGATIVE_' in label:
+                wordlist = [negative_word_list]
                 if '_FORWARD_' in label:
-                    return count_forward_looking_sentences(sentences, negative_word_list)
+                    wordlist.append(negative_word_list)
                 elif '_NUMERIC_' in label:
                     return count_numeric_sentences(sentences, negative_word_list)
-                else:
-                    return count_negative_sentences(sentences)
+                return count_wordlist_sentences(sentences, wordlist=wordlist)
+
             elif '_FORWARD_' in label:
+                wordlist = [forward_word_list]
                 if '_NUMERIC_' in label:
                     return count_numeric_sentences(sentences, forward_word_list)
-                else:
-                    return count_forward_looking_sentences(sentences)
+                return count_wordlist_sentences(sentences, wordlist=wordlist)
+
             elif '_TOTAL_' in label:
                 return count_sentences(sentences)
             elif '_NUMERIC_' in label:

@@ -20,9 +20,9 @@ if __name__ == '__main__':
                 #if header_dict['ACCESSION NUMBER'] != '0001144204-18-058900':
                 #    continue
                 if 'Results' in header_dict['ITEM INFORMATION']:
-                    parser.output_location = os.path.join('/media/abc-123/EDGAR/8K_Output_2/',header_dict['FILING YEAR'])
+                    parser.output_location = os.path.join('/media/abc-123/EDGAR/8K_Output_3/',header_dict['FILING YEAR'])
                     f.seek(0)
                     parser.new_document(f.read())
                     parser.save_documents('99', ('ex99', 'EX99', 'ex-99', 'EX-99', 'ex_99', 'EX_99', '99_1', '99'),
-                                          filename=header_dict['ACCESSION NUMBER'], expanded_search = True)
+                                          filename=header_dict['ACCESSION NUMBER'], expanded_search = True, search_string = '((?:press|immediate|news|media) release|contact[ˆe]+?)')
 

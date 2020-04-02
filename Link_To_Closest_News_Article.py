@@ -3,6 +3,7 @@ import math
 import os
 import nltk
 import sys
+#nltk.download('all')
 nltk.download('cmudict')
 nltk.download('punkt')
 from concurrent import futures
@@ -107,8 +108,8 @@ def find_articles(article):
         news_article_text = news_article.read()
         edgar_article_key = article[2]
         #only want those 8-Ks with a cover sheet and the earnings press release
-        if public_doc_count_check(all_8k_headers[edgar_article_key]['PUBLIC DOCUMENT COUNT'], 2):
-            return (False, article)
+        #if public_doc_count_check(all_8k_headers[edgar_article_key]['PUBLIC DOCUMENT COUNT'], 2):
+        #    return (False, article)
         # if edgar_article_key in files_to_skip:
         #     return False
         edgar_article_match = parsed_articles_dict[year].get(edgar_article_key, None)
@@ -577,9 +578,10 @@ def mp_handler():
             with futures.ProcessPoolExecutor(max_workers = mp.cpu_count()-2) as executor:
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
                 #need to iterate the list to submit!
-                start = 70000+2000
+                #start = 70000+2000
+                start = 0
                 #start = 6292+1274+540+1404+2150+5482+715+1965
-                running = {executor.submit(find_articles, article): article for article in tqdm(articles_to_compare[50000:start])}
+                running = {executor.submit(find_articles, article): article for article in tqdm(articles_to_compare)}
                 #please work -- if it does this will TAKE the results one by one as they are released and write to the file.
                 #please work :(
                 for result in futures.as_completed(running):
