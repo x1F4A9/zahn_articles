@@ -91,7 +91,8 @@ def syllables(word):
     return count
 
 def get_words(sentence):
-    return word_tokenize(sentence)
+    return sentence.split()
+    #return word_tokenize(sentence)
 
 def _detect_tense(tagged_words, tags):
     """
@@ -172,14 +173,21 @@ def regex_search(sentence, regex_searches=None):
 
 
 def word_list_search(sentence, wordlists=None):
-    wordlist_flag = False
+    wordlist_flag = True
+    #construct a bad character translation table so we can QUICKLY and CORRECTLY identify words.
+    bad_char = str.maketrans({'.':None, ',':None, '"':None, "'":None,'"':None, ';':None, ':':None})
     for wordlist in wordlists:
-        wordlist_flag = False
-        #reset wordlist flag after each iteration -- if the word is found then it will be true at the end, no matter what
-        for word in get_words(sentence):
-            if word.upper().rstrip() in wordlist:
-                wordlist_flag = True
-                break
+        #bug quashing!
+        #wordlist flag check at the beginning is required -- otherwise we can FAIL, then PASS and count the sentence in
+        #a multiple wordlist check. Subtle fencepost bug. This is an AND condition -- if a single wordlist fails, then
+        #we do not need to check the remaining wordlists.
+        if wordlist_flag:
+            wordlist_flag = False
+            #reset wordlist flag after each iteration -- if the word is found then it will be true at the end, no matter what
+            for word in get_words(sentence):
+                if word.upper().translate(bad_char) in wordlist:
+                    wordlist_flag = True
+                    break
     if wordlist_flag:
         return True
     return False
@@ -283,7 +291,7 @@ def count_sentences(document):
 
 def _scan_tense_type(type):
     """
-    Internal function that scans the data label for a tense word (_PAST_, _PRESENT_, _FUTURE_ [tenses]).
+    Internal function that sca ns the data label for a tense word (_PAST_, _PRESENT_, _FUTURE_ [tenses]).
     Data label is used to determine which tense to search
     :param type: Data label. String
     :return: On Success: String that is used in the _detect_sentence_tense() function to determine which tense to search for.
@@ -406,23 +414,20 @@ def count_numeric_sentences(sentences, *wordlists):
         wordlists, *dump = wordlists
     if wordlists:
         for sentence in sentences:
-            multiple_wordlist_flag = False
+            wordlist_flag = False
             numeric_flag = False
+            if word_list_search(sentence, wordlists=wordlists):
+                wordlist_flag = True
             for word in get_words(sentence):
-                if word.isdigit():
+                if any(ch.isdigit() for ch in word):
                     numeric_flag = True
-                for wordlist in wordlists:
-                    if word.upper().rstrip() in wordlist:
-                        multiple_wordlist_flag = True
-                    else:
-                        multiple_wordlist_flag = False
-                        break
-            if multiple_wordlist_flag and numeric_flag:
+                    break
+            if wordlist_flag and numeric_flag:
                     number_of_sentences += 1
     else:
         for sentence in sentences:
             for word in get_words(sentence):
-                if word.isdigit():
+                if any(ch.isdigit() for ch in word):
                     number_of_sentences += 1
                     break
     return number_of_sentences
@@ -579,66 +584,27 @@ class branching(object):
                     sentences = self.present_sentences[1]
                     number_of_sentences = self.present_sentences[0]
 
-            if '_EARNINGS_' in label and '_QUANTITATIVE_' in label:
-                wordlist = [earnings_word_list]
-                if '_FORWARD_' in label:
-                    wordlist.append(forward_word_list)
-                elif '_NUMERIC_' in label:
-                    return count_numeric_sentences(sentences, earnings_word_list)
-                elif '_POSITIVE_' in label:
-                    wordlist.append(positive_word_list)
-                elif '_NEGATIVE_' in label:
-                    wordlist.append(negative_word_list)
+#TODO: Refactor this whole mess -- consolidate it into a single function
+            wordlist = []
+            regex = False
+            if '_QUANTITATIVE_' in label:
+                regex = True
+            if '_EARNINGS_' in label:
+                wordlist.append(earnings_word_list)
+            if '_FORWARD_' in label:
+                wordlist.append(forward_word_list)
+            if '_POSITIVE_' in label:
+                wordlist.append(positive_word_list)
+            if '_NEGATIVE_' in label:
+                wordlist.append(negative_word_list)
+            if '_NUMERIC_' in label:
+                return count_numeric_sentences(sentences, wordlist)
+            elif regex:
                 return count_wordlist_sentences(sentences, wordlist=wordlist, regex=regex_list)
-
-            elif '_EARNINGS_' in label and '_QUANTITATIVE_' not in label:
-                wordlist = [earnings_word_list]
-                if '_FORWARD_' in label:
-                    wordlist.append(forward_word_list)
-                elif '_NUMERIC_' in label:
-                    return count_numeric_sentences(sentences, earnings_word_list)
-                elif '_POSITIVE_' in label:
-                    wordlist.append(positive_word_list)
-                elif '_NEGATIVE_' in label:
-                    wordlist.append(negative_word_list)
+            elif wordlist:
                 return count_wordlist_sentences(sentences, wordlist=wordlist)
-
-            elif '_QUANTITATIVE_' in label:
-                wordlist = []
-                if '_FORWARD_' in label:
-                    wordlist.append(forward_word_list)
-                elif '_POSITIVE_' in label:
-                    wordlist.append(positive_word_list)
-                elif '_NEGATIVE_' in label:
-                    wordlist.append(negative_word_list)
-                return count_wordlist_sentences(sentences, wordlist=wordlist, regex=regex_list)
-
-            elif '_POSITIVE_' in label:
-                wordlist = [positive_word_list]
-                if '_FORWARD_' in label:
-                    wordlist.append(forward_word_list)
-                elif '_NUMERIC_' in label:
-                    return count_numeric_sentences(sentences, positive_word_list)
-                return count_wordlist_sentences(sentences, wordlist=wordlist)
-
-            elif '_NEGATIVE_' in label:
-                wordlist = [negative_word_list]
-                if '_FORWARD_' in label:
-                    wordlist.append(negative_word_list)
-                elif '_NUMERIC_' in label:
-                    return count_numeric_sentences(sentences, negative_word_list)
-                return count_wordlist_sentences(sentences, wordlist=wordlist)
-
-            elif '_FORWARD_' in label:
-                wordlist = [forward_word_list]
-                if '_NUMERIC_' in label:
-                    return count_numeric_sentences(sentences, forward_word_list)
-                return count_wordlist_sentences(sentences, wordlist=wordlist)
-
             elif '_TOTAL_' in label:
                 return count_sentences(sentences)
-            elif '_NUMERIC_' in label:
-                return count_numeric_sentences(sentences)
             else:
                 return number_of_sentences
         #default value

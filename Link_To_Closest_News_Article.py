@@ -575,6 +575,7 @@ def mp_handler():
             writer.writeheader()
             #for header_data in pool.imap(find_articles, tqdm(articles_to_compare),8):
             #much better way when compared with
+            #mp.cpu_count()-2
             with futures.ProcessPoolExecutor(max_workers = mp.cpu_count()-2) as executor:
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
                 #need to iterate the list to submit!
