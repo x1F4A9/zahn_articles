@@ -1,3 +1,6 @@
+#TODO: Remove unused code
+#TODO: Declutter the birdsnests.
+
 import csv
 import math
 import os
@@ -108,6 +111,7 @@ def find_articles(article):
                                 ordered_fieldnames_1[label] = a
                             else:
                                 ordered_fieldnames_1[label] = '-99'
+                    #todo: Add this to the config file -- this is a birds nest and is unreadable.
                     ordered_fieldnames_1['GVKEY'] = identifying_fieldnames[1]
                     ordered_fieldnames_1['FDS'] = identifying_fieldnames[2]
                     ordered_fieldnames_1['CUSIP'] = identifying_fieldnames[3]
@@ -303,6 +307,7 @@ else:
     pickle.dump(parsed_articles_dict, open('parsed_articles_dict.pickle', 'wb'))
 
 articles_to_compare = []
+#TODO: Refactor -- this is a birdsnest.
 if use_pickle_article:
     articles_to_compare = pickle.load(open('articles_to_compare.pickle', 'rb'))
 else:
@@ -501,7 +506,7 @@ counter = 1
 #     global _COUNTER
 #     _COUNTER = counter
 
-
+#TODO: Birdsnest
 def mp_handler():
     #pool = mp.Pool(mp.cpu_count()-2)
     #counter = mp.Value('i', 0)
