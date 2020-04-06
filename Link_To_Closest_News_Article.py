@@ -2,12 +2,10 @@ import csv
 import math
 import os
 import nltk
-import sys
 #nltk.download('all')
 nltk.download('cmudict')
 nltk.download('punkt')
 from concurrent import futures
-import traceback
 from collections import OrderedDict
 from tqdm import tqdm
 import multiprocessing as mp
@@ -26,27 +24,16 @@ use_pickle_article = True
 
 #local imports
 import data_labels
+import config
+#from x import * is normally a bad practice -- but this file contains only functions so namespaces are not a concern!
+from article_tools import *
+##############################
 from linguistic_tools import branching, parse_sentences
-import document_cleaning_tools
-
-# import spacy
-# nlp = spacy.load('en_core_web_sm')
-
-
 
 class ViviDict(dict):
     def __missing__(self, key):
         value = self[key] = type(self)()
         return value
-
-class AutoVivication(dict):
-    """implementation of perl's autovivification feature."""
-    def __getitem__(self, item):
-        try:
-            return dict.__getitem__(self, item)
-        except KeyError:
-            value = self[item] = type(self)()
-            return value
 
 #construct all valid 8-k's
 all_8k_headers = {}
@@ -55,48 +42,7 @@ with open('/media/abc-123/EDGAR/ALL_8K_HEADER_INFO_2002_2019_RO.csv', 'r', error
     for line in reader:
         all_8k_headers[line['ACCESSION NUMBER']] = line
 
-def return_blank_ordered_dictionary():
-    blank_ordered_dictionary = OrderedDict()
-    for item in data_labels.label_headers:
-        blank_ordered_dictionary[item] = '-99'
-    return blank_ordered_dictionary
 
-
-
-def public_doc_count_check(doc_count, value, exact_value = True):
-    if exact_value:
-        if int(doc_count) < value:
-            return True
-        if int(doc_count) > value:
-            return True
-    else:
-        if int(doc_count) < value:
-            return False
-
-
-def remove_tables(soup_text, max_percent_numbes_in_tables):
-    for table in soup_text.findAll('table'):
-        count_number = 0
-        text = table.get_text().strip()
-        for character in text:
-            if character.isnumeric():
-                count_number += 1
-        try:
-            if count_number / len(text) > max_percent_numbes_in_tables:
-                table.decompose()
-        except ZeroDivisionError:
-            pass
-    return soup_text
-
-
-def remove_short_lines(text, length):
-    text = text.split('\n')
-    post_text = []
-    for line in text:
-        if len(line) > length:
-            post_text.append(line)
-    return_text = ''.join(post_text)
-    return return_text
 
 
 def find_articles(article):
@@ -571,12 +517,12 @@ def mp_handler():
     with open('/media/abc-123/EDGAR/multiple_files.txt', 'w', errors='ignore', encoding='UTF-8') as multiple_l:
         with open(output_file, 'w', newline='', errors="ignore", encoding='UTF-8') as csv_l:
             #write headers
-            writer = csv.DictWriter(csv_l, fieldnames=return_blank_ordered_dictionary().keys())
+            writer = csv.DictWriter(csv_l, fieldnames=return_blank_ordered_dictionary())
             writer.writeheader()
             #for header_data in pool.imap(find_articles, tqdm(articles_to_compare),8):
             #much better way when compared with
             #mp.cpu_count()-2
-            with futures.ProcessPoolExecutor(max_workers = mp.cpu_count()-2) as executor:
+            with futures.ProcessPoolExecutor(max_workers = mp.cpu_count()-1) as executor:
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
                 #need to iterate the list to submit!
                 #start = 70000+2000

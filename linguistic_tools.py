@@ -9,6 +9,22 @@ from nltk import word_tokenize, pos_tag
 from nltk.parse import CoreNLPParser
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+#move this exception to another file (exceptions file)
+#import linguistic_error_handling
+
+class Error(Exception):
+    """Base class for exceptions in this module"""
+    pass
+
+class LabelError(Error):
+    def __init__(self, label_value):
+        self.label_value = label_value
+    def __str__(self):
+        return "Error in label. Key not found in label_dictionary. Value of label: {}".format(self.label_value)
+
+
+#End error handling
+
 tense_tags = {
                    'PAST':['VBD', 'VBN',],
                    'PRESENT':['VBP', 'VBZ', 'VBG',],
@@ -291,7 +307,7 @@ def count_sentences(document):
 
 def _scan_tense_type(type):
     """
-    Internal function that sca ns the data label for a tense word (_PAST_, _PRESENT_, _FUTURE_ [tenses]).
+    Internal function that scans the data label for a tense word (_PAST_, _PRESENT_, _FUTURE_ [tenses]).
     Data label is used to determine which tense to search
     :param type: Data label. String
     :return: On Success: String that is used in the _detect_sentence_tense() function to determine which tense to search for.
@@ -338,7 +354,7 @@ def _past_present_detection(sentence, modal=False, nonmodal=False):
     else:
         return False
 
-def detect_sentence(sentences, type, modal = False, nonmodal = False, use_data_label_for_tense = True):
+def detect_sentence(sentences, type, modal = False, nonmodal = False, use_data_label_for_tense = False):
     """
     Flexible function that identifies the tense and modal quality of a sentence. Can use the data label for loops! Fails cleanly.
     If there is no tense found then nothing will be returned
@@ -469,6 +485,8 @@ def jaccard_sim(text1,text2):
 
 class branching(object):
     def __init__(self):
+        #Cache for the sentences
+        #prevents recalculating sentence counts unnecessarially.
         self.present_sentences = False
         self.past_sentences = False
         self.modal_sentences = False
@@ -480,6 +498,19 @@ class branching(object):
         self.past_present_sentences = False
         self.past_present_modal_sentences = False
         self.past_present_nonmodal_sentences = False
+        self.label_dict = {
+                1:['MODAL', self.past_modal_sentences],
+                2:['NONMODAL', self.past_nonmodal_sentences],
+                4:['PAST', self.past_sentences],
+                5:['PAST', self.past_modal_sentences],
+                6:['PAST', self.past_nonmodal_sentences],
+                8:['PRESENT', self.present_sentences],
+                9:['PRESENT', self.present_modal_sentences],
+                10:['PRESENT', self.present_nonmodal_sentences],
+                12:['PAST_PRESENT', self.past_present_sentences],
+                13:['PAST_PRESENT', self.past_present_modal_sentences],
+                14:['PAST_PRESENT', self.past_present_nonmodal_sentences],
+            }
 
     def brancher(self, label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences, **kwargs):
         """
@@ -515,74 +546,123 @@ class branching(object):
         #sentence level measurements
         #TODO: Refactor this
         elif '_SENTENCE_' in label:
-            tense = _scan_tense_type(label)
-            modal = _scan_modal(label)
-            nonmodal = False
-            if 'NONMODAL' in label:
-                nonmodal = True
-            #basic model. Sentences can have multiple tenses! (complex sentences)
-            if modal:
-                if 'PAST_PRESENT' in label:
-                    if not self.past_present_modal_sentences:
-                        self.past_present_modal_sentences = detect_sentence(sentences, label, modal=modal)
-                    sentences = self.past_present_modal_sentences[1]
-                    number_of_sentences = self.past_present_modal_sentences[0]
-                elif tense == 'PAST':
-                    if not self.past_modal_sentences:
-                        self.past_modal_sentences = detect_sentence(sentences, label, modal=modal)
-                    sentences = self.past_modal_sentences[1]
-                    #print(sentences)
-                    number_of_sentences = self.past_modal_sentences[0]
-                elif tense == 'PRESENT':
-                    if not self.present_modal_sentences:
-                        self.present_modal_sentences = detect_sentence(sentences, label, modal=modal)
-                    sentences = self.present_modal_sentences[1]
-                    #print(sentences)
-                    number_of_sentences = self.present_modal_sentences[0]
-                else:
-                    if not self.modal_sentences:
-                        self.modal_sentences = detect_sentence(sentences, label, modal=modal)
-                    sentences = self.modal_sentences[1]
-                    #print(sentences)
-                    number_of_sentences = self.modal_sentences[0]
-            elif nonmodal:
-                if 'PAST_PRESENT' in label:
-                    if not self.past_present_nonmodal_sentences:
-                        self.past_present_nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
-                    sentences = self.past_present_nonmodal_sentences[1]
-                    number_of_sentences = self.past_present_nonmodal_sentences[0]
+            #tense = _scan_tense_type(label)
+            #modal = _scan_modal(label)
+            #nonmodal = False
 
-                elif tense == 'PAST':
-                    if not self.past_nonmodal_sentences:
-                        self.past_nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
-                    sentences = self.past_nonmodal_sentences[1]
-                    number_of_sentences = self.past_nonmodal_sentences[0]
-                elif tense == 'PRESENT':
-                    if not self.present_nonmodal_sentences:
-                        self.present_nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
-                    sentences = self.present_nonmodal_sentences[1]
-                    number_of_sentences = self.present_nonmodal_sentences[0]
-                else:
-                    if not self.nonmodal_sentences:
-                        self.nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
-                    sentences = self.nonmodal_sentences[1]
-                    number_of_sentences = self.nonmodal_sentences[0]
+            #construct a binary counter to determine the tense 1-16
+            #each sum maps one to one to a unique tense value
+            tense_value = 0
+
+            #if the term is in the label: add it to the counter
+            if 'MODAL' in label:
+                tense_value += 1
+            if 'NONMODAL' in label:
+                tense_value += 2
+            if 'PAST' in label:
+                tense_value += 4
+            if 'PRESENT' in label:
+                tense_value += 8
+
+            #grab the unique value from the dictionary and automagically check the sentence
+            label_items = self.label_dict.get(tense_value)
+
+            #this is a bit ugly -- but it works (for now)
+            if label_items is None:
+                try:
+                    pass
+                except:
+                    raise LabelError(label)
+            # this is where the automagic happens
             else:
-                if 'PAST_PRESENT' in label:
-                    if not self.past_present_sentences:
-                        self.past_present_sentences = detect_sentence(sentences, label)
-                    sentences = self.past_present_sentences[1]
-                    number_of_sentences = self.past_present_sentences[0]
-                elif tense == 'PAST':
-                    if not self.past_sentences:
-                        self.past_sentences = detect_sentence(sentences, label)
-                    sentences = self.past_sentences[1]
-                    number_of_sentences = self.past_sentences[0]
-                elif tense == 'PRESENT':
-                    if not self.present_sentences:
-                        self.present_sentences = detect_sentence(sentences, label)
-                    sentences = self.present_sentences[1]
-                    number_of_sentences = self.present_sentences[0]
+                tense_label = label_items[0]
+                tense_sentences = label_items[1]
+                if tense_sentences:
+                    pass
+                elif tense_value%4 == 0:
+                    tense_sentences = detect_sentence(sentences, tense_label)
+                    self.label_dict[tense_value][1] = tense_sentences
+                elif tense_value%4 == 1:
+                    tense_sentences = detect_sentence(sentences, tense_label, modal=True)
+                    self.label_dict[tense_value][1] = tense_sentences
+                elif tense_value%4 == 2:
+                    tense_sentences = detect_sentence(sentences, tense_label, nonmodal=True)
+                    self.label_dict[tense_value][1] = tense_sentences
+                if tense_sentences:
+                    sentences = tense_sentences[1]
+                    number_of_sentences = tense_sentences[0]
+                else:
+                    return -99
+            #
+            #
+            #
+            #
+            #
+            #
+            #
+            # #basic model. Sentences can have multiple tenses! (complex sentences)
+            # if modal:
+            #     if 'PAST_PRESENT' in label:
+            #         if not self.past_present_modal_sentences:
+            #             self.past_present_modal_sentences = detect_sentence(sentences, label, modal=modal)
+            #         sentences = self.past_present_modal_sentences[1]
+            #         number_of_sentences = self.past_present_modal_sentences[0]
+            #     elif tense == 'PAST':
+            #         if not self.past_modal_sentences:
+            #             self.past_modal_sentences = detect_sentence(sentences, label, modal=modal)
+            #         sentences = self.past_modal_sentences[1]
+            #         #print(sentences)
+            #         number_of_sentences = self.past_modal_sentences[0]
+            #     elif tense == 'PRESENT':
+            #         if not self.present_modal_sentences:
+            #             self.present_modal_sentences = detect_sentence(sentences, label, modal=modal)
+            #         sentences = self.present_modal_sentences[1]
+            #         #print(sentences)
+            #         number_of_sentences = self.present_modal_sentences[0]
+            #     else:
+            #         if not self.modal_sentences:
+            #             self.modal_sentences = detect_sentence(sentences, label, modal=modal)
+            #         sentences = self.modal_sentences[1]
+            #         #print(sentences)
+            #         number_of_sentences = self.modal_sentences[0]
+            # elif nonmodal:
+            #     if 'PAST_PRESENT' in label:
+            #         if not self.past_present_nonmodal_sentences:
+            #             self.past_present_nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
+            #         sentences = self.past_present_nonmodal_sentences[1]
+            #         number_of_sentences = self.past_present_nonmodal_sentences[0]
+            #
+            #     elif tense == 'PAST':
+            #         if not self.past_nonmodal_sentences:
+            #             self.past_nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
+            #         sentences = self.past_nonmodal_sentences[1]
+            #         number_of_sentences = self.past_nonmodal_sentences[0]
+            #     elif tense == 'PRESENT':
+            #         if not self.present_nonmodal_sentences:
+            #             self.present_nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
+            #         sentences = self.present_nonmodal_sentences[1]
+            #         number_of_sentences = self.present_nonmodal_sentences[0]
+            #     else:
+            #         if not self.nonmodal_sentences:
+            #             self.nonmodal_sentences = detect_sentence(sentences, label, nonmodal=nonmodal)
+            #         sentences = self.nonmodal_sentences[1]
+            #         number_of_sentences = self.nonmodal_sentences[0]
+            # else:
+            #     if 'PAST_PRESENT' in label:
+            #         if not self.past_present_sentences:
+            #             self.past_present_sentences = detect_sentence(sentences, label)
+            #         sentences = self.past_present_sentences[1]
+            #         number_of_sentences = self.past_present_sentences[0]
+            #     elif tense == 'PAST':
+            #         if not self.past_sentences:
+            #             self.past_sentences = detect_sentence(sentences, label)
+            #         sentences = self.past_sentences[1]
+            #         number_of_sentences = self.past_sentences[0]
+            #     elif tense == 'PRESENT':
+            #         if not self.present_sentences:
+            #             self.present_sentences = detect_sentence(sentences, label)
+            #         sentences = self.present_sentences[1]
+            #         number_of_sentences = self.present_sentences[0]
 
 #TODO: Refactor this whole mess -- consolidate it into a single function
             wordlist = []
