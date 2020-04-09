@@ -2,6 +2,34 @@
 from collections import OrderedDict
 from data_labels import label_headers
 
+class Error(Exception):
+    def __init__(self):
+        pass
+
+class LengthError(Error):
+    def __init__(self, *args):
+        self.args = [a for a in args]
+    def __str__(self):
+        return ('Lengths of list do not match. '
+                'Lengths of lists: '+' '.join([str(len(a)) for a in self.args]))
+
+def _construct_fieldnames(filename, ordered_keys = [], sep = "_"):
+    if sep:
+        values = filename.split(sep)
+    else:
+        values = filename
+    if len (labels) == len(ordered_keys):
+        return dict(zip(ordered_keys, values))
+    else:
+        raise LengthError(labels, ordered_keys)
+
+
+def _construct_dictionary_from_dictionary(target_dictionary, source_dictionary, ordered_keys=None):
+    for key in ordered_keys:
+        target_dictionary[key] = source_dictionary.get(key)
+    return target_dictionary
+
+
 def return_blank_ordered_dictionary():
     blank_ordered_dictionary = OrderedDict()
     for item in label_headers:
