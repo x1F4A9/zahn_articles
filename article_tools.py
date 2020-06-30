@@ -10,21 +10,25 @@ class LengthError(Error):
     def __init__(self, *args):
         self.args = [a for a in args]
     def __str__(self):
-        return ('Lengths of list do not match. '
-                'Lengths of lists: '+' '.join([str(len(a)) for a in self.args]))
+        return ('Lengths of list do not match. \n'
+                '\nLengths of lists: '+' '.join([str(len(a)) for a in self.args])+
+                '\nLists: '+' '.join([str(a) for a in self.args]))
 
-def _construct_fieldnames(filename, ordered_keys = [], sep = "_"):
+def _construct_fieldnames(filename, ordered_keys = [], sep = "_", items_to_match = None):
     if sep:
         values = filename.split(sep)
     else:
         values = filename
-    if len (labels) == len(ordered_keys):
+    if items_to_match:
+        values = values[0:items_to_match-1]
+        ordered_keys = ordered_keys[0:items_to_match-1]
+    if len (values) == len(ordered_keys):
         return dict(zip(ordered_keys, values))
     else:
-        raise LengthError(labels, ordered_keys)
+        raise LengthError(values, ordered_keys)
 
 
-def _construct_dictionary_from_dictionary(target_dictionary, source_dictionary, ordered_keys=None):
+def _create_dictionary_from_dictionary(target_dictionary, source_dictionary, ordered_keys=None):
     for key in ordered_keys:
         target_dictionary[key] = source_dictionary.get(key)
     return target_dictionary

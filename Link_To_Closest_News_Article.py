@@ -5,7 +5,10 @@ import csv
 import math
 import os
 import nltk
+import re
 #nltk.download('all')
+from article_tools import _construct_fieldnames, _create_dictionary_from_dictionary
+
 nltk.download('cmudict')
 nltk.download('punkt')
 from concurrent import futures
@@ -44,51 +47,59 @@ with open('/media/abc-123/EDGAR/ALL_8K_HEADER_INFO_2002_2019_RO.csv', 'r', error
     reader = csv.DictReader(all_8k_header_file)
     for line in reader:
         all_8k_headers[line['ACCESSION NUMBER']] = line
-
+print('8k headers')
 #main multiprocessing function --
+
 def find_articles(article_filename):
     #print('spawned')
     #place fieldnames here instead of global. Multiprocessing functions can only take one input and return one output
     #no point refactoring to make a dictionary as this function is a one-off-- just change the variable names here
     article_filename_keys = ['YEAR',
-                            'NEWS_FILENAME',
+                            'NEWS_ARTICLE_FILENAME',
                             'EDGAR_ARTICLE_KEY',
-                            'NEWS_TIMESTAMP',
-                            'EDGAR_TIMESTAMP',
-                            'TIMESTAMP_DISTANCE', ]
-    fieldname_keys = ['GVKEY',
-                     'FDS',
-                     'CUSIP',
-                     'TICKER']
-    edgar_header_keys = ['ACCEPTANCE-DATETIME',
-                        'CENTRAL INDEX KEY',
+                            'NEWS_ARTICLE_TIMESTAMP',
+                            'EDGAR_EXHIBIT_TIMESTAMP',
+                            'TIMESTAMP_DISTANCE',
+                            'EDGAR_YEAR']
+    news_article_keys = ['COMPANY_NAME_NEWS_FILENAME',
+                                         'GVKEY',
+                                         'FDS',
+                                         'CUSIP',
+                                         'TICKER',
+                                         'NEWS_ARTICLE_DATE_1',
+                                           ]
+    edgar_header_keys = [
+                        'ACCESSION_NUMBER',
+                        'ACCEPTANCE-DATETIME',
+                        'CENTRAL_INDEX_KEY',
                         'CITY',
-                        'COMPANY CONFORMED NAME',
-                        'CONFORMED PERIOD OF REPORT',
-                        'CONFORMED SUBMISSION TYPE',
-                        'FILED AS OF DATE',
+                        'COMPANY_CONFORMED_NAME',
+                        'CONFORMED_PERIOD_OF_REPORT',
+                        'CONFORMED_SUBMISSION_TYPE',
+                        'EXHIBIT_NAME',
+                        'FILED_AS_OF_DATE',
                         'FILENAME',
-                        'FILING YEAR',
-                        'FISCAL YEAR END',
-                        'ITEM INFORMATION',
+                        'FILING_YEAR',
+                        'FISCAL_YEAR_END',
+                        'ITEM_INFORMATION',
                         'LINK',
-                        'PUBLIC DOCUMENT COUNT',
-                        'STANDARD INDUSTRIAL CLASSIFICATION',
+                        'PUBLIC_DOCUMENT_COUNT',
+                        'STANDARD_INDUSTRIAL_CLASSIFICATION',
                         'STATE',
-                        'STATE OF INCORPORATION',]
-    article_filename = _construct_fieldnames(article_filename, ordered_keys=article_filename_keys, sep=None)
-    year = article_filename['YEAR']
-    news_article_location = os.path.join(articles_root, article_filename[1])
+                        'STATE_OF_INCORPORATION',]
+    article_filename_fields = _construct_fieldnames(article_filename, ordered_keys=article_filename_keys, sep=None)
+    year = article_filename_fields['YEAR']
+    news_article_location = os.path.join(articles_root, article_filename_fields['NEWS_ARTICLE_FILENAME'])
     final_data_dictionary = []
     with open(news_article_location, 'r', errors='ignore') as news_article:
         news_article_text = news_article.read()
-        edgar_article_key = article_filename['EDGAR_ARTICLE_KEY']
+        edgar_8k_identfier_key = article_filename_fields['EDGAR_ARTICLE_KEY']
         #only want those 8-Ks with a cover sheet and the earnings press release
         #if public_doc_count_check(all_8k_headers[edgar_article_key]['PUBLIC DOCUMENT COUNT'], 2):
         #    return (False, article)
         # if edgar_article_key in files_to_skip:
         #     return False
-        edgar_article_match = parsed_edgar_files_dict[year].get(edgar_article_key, None)
+        edgar_article_match = parsed_edgar_files_dict[year].get(edgar_8k_identfier_key, None)
         if edgar_article_match:
             for edgar_article_candidate in edgar_article_match:
                 edgar_article_fields = edgar_article_candidate[0].split(sep='<>')
@@ -99,45 +110,56 @@ def find_articles(article_filename):
                     # if all_8k_headers[edgar_article_key]['LINK'] != 'http://www.sec.gov/Archives/edgar/data/794367/000079436710000154/es8k08112010.htm':
                     #     continue
                     observation_data_dictionary = return_blank_ordered_dictionary()
-                    fieidnames = _construct_fieldnames(article_filename[1], ordered_keys=fieldname_keys)
+                    observation_data_dictionary['INTERNAL_EXHIBIT_FILENAME'] = edgar_article_candidate[0]
+                    observation_data_dictionary['INTERNAL_ARTICLE_FILENAME'] = article_filename[1]
+
+                    #wsj -- refactor this
+                    news_article.seek(0)
+                    news_article_first_10_lines = [next(news_article) for i in range(10)]
+                    news_article_first_10_lines = ' '.join(news_article_first_10_lines)
+                    if re.search('(?:\swall street journal\s)|(?:wsj)',news_article_first_10_lines,re.I):
+                        observation_data_dictionary['WSJ_ARTICLE'] = 1
+                    else:
+                        observation_data_dictionary['WSJ_ARTICLE'] = 0
+                    news_article_fields = _construct_fieldnames(article_filename_fields['NEWS_ARTICLE_FILENAME'], ordered_keys=news_article_keys, items_to_match=5)
                     #identifying_fieldnames = article[1].split('_')
                     #
-                    edgar_article_text = edgar_article.read()
-                    soup = BeautifulSoup(edgar_article_text, "lxml")
+                    #edgar_article_text = edgar_article.read()
+                    #soup = BeautifulSoup(edgar_article_text, "lxml")
                     #keep some tables -- they will be removed by the sentence parser if its pure numbers
                     #some filers put their entire presentation in tabular format
                     #TODO: PREPROCESS BEAUTIFULSOUP
-                    soup = remove_tables(soup, .8)
-                    edgar_article_text = soup.get_text()
+                    #soup = remove_tables(soup, .8)
+                    #edgar_article_text = soup.get_text()
 
                     #post processing -- guest 2018 -- remove short lines
-                    edgar_article_text = remove_short_lines(edgar_article_text, 19)
-                    news_article_text = remove_short_lines(news_article_text, 19)
+                    #edgar_article_text = remove_short_lines(edgar_article_text, 19)
+                    #news_article_text = remove_short_lines(news_article_text, 19)
 
-                    edgar_article_sentences = parse_sentences(edgar_article_text)
-                    news_article_sentences = parse_sentences(news_article_text)
+                    #edgar_article_sentences = parse_sentences(edgar_article_text)
+                    #news_article_sentences = parse_sentences(news_article_text)
                     edgar_branching_obj = branching()
                     news_branching_obj = branching()
                     simscore_branching_obj = branching()
-                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, article_filename, ordered_keys=article_fieldname_keys)
-                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, fieldnames, ordered_keys=fieldname_keys)
-                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, all_8k_headers[edgar_article_key], ordered_keys=edgar_header_keys)
+                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, article_filename_fields, ordered_keys=article_filename_keys)
+                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, news_article_fields, ordered_keys=news_article_keys)
+                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, all_8k_headers[edgar_8k_identfier_key], ordered_keys=edgar_header_keys)
                     for label in data_labels.label_headers:
                         if 'SIMSCORE_' in label:
-                            a = simscore_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
+                            a = False#simscore_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
                             if a or a == 0:
                                 observation_data_dictionary[label] = a
                             else:
                                 observation_data_dictionary[label] = '-99'
                         elif 'EDGAR' in label:
-                            a = edgar_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
+                            a = False#edgar_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
                             if a or a == 0:
                                 observation_data_dictionary[label] = a
                             else:
                                 observation_data_dictionary[label] = '-99'
                         elif 'NEWS_ARTICLE' in label:
-                            a = news_branching_obj.brancher(label, news_article_text, edgar_article_text,
-                                                             news_article_sentences, edgar_article_sentences)
+                            a = False#news_branching_obj.brancher(label, news_article_text, edgar_article_text,
+                                                             #news_article_sentences, edgar_article_sentences)
                             if a or a == 0:
                                 observation_data_dictionary[label] = a
                             else:
@@ -397,13 +419,12 @@ def mp_handler():
         counter_main_file += 1
     with open('/media/abc-123/EDGAR/multiple_files.txt', 'w', errors='ignore', encoding='UTF-8') as multiple_l:
         with open(output_file, 'w', newline='', errors="ignore", encoding='UTF-8') as csv_l:
-            #write headers
-            writer = csv.DictWriter(csv_l, fieldnames=return_blank_ordered_dictionary())
-            writer.writeheader()
+            # write headers
             #much better way when compared with
+            write_headers = True
             #for header_data in pool.imap(find_articles, tqdm(articles_to_compare),8):
             #mp.cpu_count()-2
-            with futures.ProcessPoolExecutor(max_workers = mp.cpu_count()-1) as executor:
+            with futures.ProcessPoolExecutor(max_workers = 1) as executor:
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
                 #need to iterate the list to submit!
                 running = {executor.submit(find_articles, article): article for article in tqdm(news_articles_to_compare_with_edgar_8k)}
@@ -416,12 +437,14 @@ def mp_handler():
                        # header_data = (False, False)
                    a = 1
                    if header_data[0]:
-                        #header_data returns a list of ordered dicts. Iterate through each one then write
-                        for l_val in header_data[1]:
-                            if l_val:
-                                writer.writerow(l_val)
-                   else:
-                       pass
+                       #header_data returns a list of ordered dicts. Iterate through each one then write
+                       for l_val in header_data[1]:
+                           if l_val:
+                               if write_headers:
+                                   writer = csv.DictWriter(csv_l, fieldnames=l_val.keys())
+                                   writer.writeheader()
+                                   write_headers=False
+                               writer.writerow(l_val)
 
 
 if __name__ == '__main__':
