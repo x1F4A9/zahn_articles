@@ -521,7 +521,8 @@ class branching(object):
         :return: relevant value
         """
         if '_JACCARD' in label:
-            return jaccard_sim(news_article_text, edgar_article_text)
+            jaccard_diff = jaccard_sim(news_article_text, edgar_article_text)
+            return 1 - jaccard_diff
         elif '_COSINE' in label:
             return cosine_sim(news_article_text, edgar_article_text)
         #set the variables to the correct values given the label

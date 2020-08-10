@@ -5,6 +5,8 @@ import csv
 import math
 import os
 import nltk
+from nltk.corpus import stopwords
+from nltk.stem.snowball import SnowballStemmer
 import re
 #nltk.download('all')
 from article_tools import _construct_fieldnames, _create_dictionary_from_dictionary
@@ -41,6 +43,16 @@ class ViviDict(dict):
         value = self[key] = type(self)()
         return value
 
+def save_raw_text_files(save_location, *files):
+    save_location_terminal_directory = 1
+    while os.path.isdir(os.path.join(save_location, str(save_location_terminal_directory))):
+        save_location_terminal_directory += 1
+    save_location = os.path.join(save_location, str(save_location_terminal_directory))
+    os.mkdir(save_location)
+    for s_file in files:
+        with open(os.path.join(save_location, s_file[0]), 'w', errors='ignore') as f_save_raw_files:
+            f_save_raw_files.write(s_file[1])
+
 #construct all valid 8-k's
 all_8k_headers = {}
 with open('/media/abc-123/EDGAR/ALL_8K_HEADER_INFO_2002_2019_RO.csv', 'r', errors='ignore') as all_8k_header_file:
@@ -69,27 +81,31 @@ def find_articles(article_filename):
                                          'NEWS_ARTICLE_DATE_1',
                                            ]
     edgar_header_keys = [
-                        'ACCESSION_NUMBER',
+                        'ACCESSION NUMBER',
                         'ACCEPTANCE-DATETIME',
-                        'CENTRAL_INDEX_KEY',
+                        'CENTRAL INDEX KEY',
                         'CITY',
-                        'COMPANY_CONFORMED_NAME',
-                        'CONFORMED_PERIOD_OF_REPORT',
-                        'CONFORMED_SUBMISSION_TYPE',
-                        'EXHIBIT_NAME',
-                        'FILED_AS_OF_DATE',
+                        'COMPANY CONFORMED NAME',
+                        'CONFORMED PERIOD OF REPORT',
+                        'CONFORMED SUBMISSION TYPE',
+                        'EXHIBIT NAME',
+                        'FILED AS OF DATE',
                         'FILENAME',
-                        'FILING_YEAR',
-                        'FISCAL_YEAR_END',
-                        'ITEM_INFORMATION',
+                        'FILING YEAR',
+                        'FISCAL YEAR END',
+                        'ITEM INFORMATION',
                         'LINK',
-                        'PUBLIC_DOCUMENT_COUNT',
-                        'STANDARD_INDUSTRIAL_CLASSIFICATION',
+                        'PUBLIC DOCUMENT COUNT',
+                        'STANDARD INDUSTRIAL CLASSIFICATION',
                         'STATE',
-                        'STATE_OF_INCORPORATION',]
+                        'STATE OF INCORPORATION',]
     article_filename_fields = _construct_fieldnames(article_filename, ordered_keys=article_filename_keys, sep=None)
     year = article_filename_fields['YEAR']
     news_article_location = os.path.join(articles_root, article_filename_fields['NEWS_ARTICLE_FILENAME'])
+    #news article filename
+    #save location
+    save_location = '/media/abc-123/EDGAR/parsed_files/'
+    article_filename = article_filename_fields['NEWS_ARTICLE_FILENAME']
     final_data_dictionary = []
     with open(news_article_location, 'r', errors='ignore') as news_article:
         news_article_text = news_article.read()
@@ -104,6 +120,8 @@ def find_articles(article_filename):
             for edgar_article_candidate in edgar_article_match:
                 edgar_article_fields = edgar_article_candidate[0].split(sep='<>')
                 edgar_article_location = os.path.join(parsed_edgar_files_root_dir + edgar_article_candidate[1])
+                #edgar article filename
+                edgar_filename = edgar_article_candidate[0]
                 with open(edgar_article_location, 'r', errors='ignore') as edgar_article:
                     #todo: create ordered_fieldnames class to declutter code
                     #done
@@ -117,27 +135,44 @@ def find_articles(article_filename):
                     news_article.seek(0)
                     news_article_first_10_lines = [next(news_article) for i in range(10)]
                     news_article_first_10_lines = ' '.join(news_article_first_10_lines)
-                    if re.search('(?:\swall street journal\s)|(?:wsj)',news_article_first_10_lines,re.I):
+                    if re.search('(?<!of the)(?:\swall street journal)|(?:\swsj\s)',news_article_first_10_lines,re.I):
                         observation_data_dictionary['WSJ_ARTICLE'] = 1
                     else:
                         observation_data_dictionary['WSJ_ARTICLE'] = 0
+                    if re.search('((?:press|immediate|news|media) release|contact[ˆe]+?)', news_article_text, re.I):
+                        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 1
+                    else:
+                        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 0
                     news_article_fields = _construct_fieldnames(article_filename_fields['NEWS_ARTICLE_FILENAME'], ordered_keys=news_article_keys, items_to_match=5)
                     #identifying_fieldnames = article[1].split('_')
                     #
-                    #edgar_article_text = edgar_article.read()
-                    #soup = BeautifulSoup(edgar_article_text, "lxml")
+                    edgar_article_text = edgar_article.read()
+                    soup = BeautifulSoup(edgar_article_text, "lxml")
                     #keep some tables -- they will be removed by the sentence parser if its pure numbers
                     #some filers put their entire presentation in tabular format
                     #TODO: PREPROCESS BEAUTIFULSOUP
-                    #soup = remove_tables(soup, .8)
-                    #edgar_article_text = soup.get_text()
+                    soup = remove_tables(soup, .8)
+                    edgar_article_text = soup.get_text()
 
                     #post processing -- guest 2018 -- remove short lines
-                    #edgar_article_text = remove_short_lines(edgar_article_text, 19)
-                    #news_article_text = remove_short_lines(news_article_text, 19)
+                    edgar_article_text = remove_short_lines(edgar_article_text, 19)
+                    news_article_text = remove_short_lines(news_article_text, 19)
+                    #remove stop words & stem
+                    edgar_article_text = [w for w in edgar_article_text.split() if w not in stopwords.words('english')]
+                    news_article_text = [w for w in news_article_text.split() if w not in stopwords.words('english')]
+                    #stem
+                    edgar_article_text = [SnowballStemmer("english").stem(w) for w in edgar_article_text]
+                    news_article_text = [SnowballStemmer("english").stem(w) for w in news_article_text]
+                    #join everything back together again
+                    edgar_article_text = ' '.join(edgar_article_text)
+                    news_article_text = ' '.join(news_article_text)
 
-                    #edgar_article_sentences = parse_sentences(edgar_article_text)
-                    #news_article_sentences = parse_sentences(news_article_text)
+                    edgar_article_sentences = parse_sentences(edgar_article_text)
+                    news_article_sentences = parse_sentences(news_article_text)
+
+                    #save files
+                    save_raw_text_files(save_location, (edgar_filename, edgar_article_text), (article_filename, news_article_text))
+
                     edgar_branching_obj = branching()
                     news_branching_obj = branching()
                     simscore_branching_obj = branching()
@@ -146,20 +181,20 @@ def find_articles(article_filename):
                     observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, all_8k_headers[edgar_8k_identfier_key], ordered_keys=edgar_header_keys)
                     for label in data_labels.label_headers:
                         if 'SIMSCORE_' in label:
-                            a = False#simscore_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
+                            a = simscore_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
                             if a or a == 0:
                                 observation_data_dictionary[label] = a
                             else:
                                 observation_data_dictionary[label] = '-99'
                         elif 'EDGAR' in label:
-                            a = False#edgar_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
+                            a = edgar_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
                             if a or a == 0:
                                 observation_data_dictionary[label] = a
                             else:
                                 observation_data_dictionary[label] = '-99'
                         elif 'NEWS_ARTICLE' in label:
-                            a = False#news_branching_obj.brancher(label, news_article_text, edgar_article_text,
-                                                             #news_article_sentences, edgar_article_sentences)
+                            a = news_branching_obj.brancher(label, news_article_text, edgar_article_text,
+                                                             news_article_sentences, edgar_article_sentences)
                             if a or a == 0:
                                 observation_data_dictionary[label] = a
                             else:
@@ -424,7 +459,7 @@ def mp_handler():
             write_headers = True
             #for header_data in pool.imap(find_articles, tqdm(articles_to_compare),8):
             #mp.cpu_count()-2
-            with futures.ProcessPoolExecutor(max_workers = 1) as executor:
+            with futures.ProcessPoolExecutor(max_workers = mp.cpu_count()-2) as executor:
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
                 #need to iterate the list to submit!
                 running = {executor.submit(find_articles, article): article for article in tqdm(news_articles_to_compare_with_edgar_8k)}

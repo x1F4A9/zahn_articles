@@ -81,6 +81,7 @@ label_headers = [
         'EDGAR_TOTAL_WORDS',
         'EDGAR_FOG',
         'WSJ_ARTICLE',
+        'ARTICLE_MENTIONS_EA',
 ]
 
 label_headers = label_headers + construct_labels('NEWS_ARTICLE','SENTENCE_COUNT', config.tense_labels,
