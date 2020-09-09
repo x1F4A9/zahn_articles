@@ -8,6 +8,7 @@ from nltk.corpus import cmudict
 from nltk import word_tokenize, pos_tag
 from nltk.parse import CoreNLPParser
 from sklearn.feature_extraction.text import TfidfVectorizer
+from itertools import islice
 
 #move this exception to another file (exceptions file)
 #import linguistic_error_handling
@@ -255,7 +256,7 @@ def _count_words(sentence_list):
 
 def parse_sentences(document):
     """
-    Unsure if used
+    Not used
     :param document:
     :return:
     """
@@ -310,7 +311,7 @@ def _scan_tense_type(type):
     Internal function that scans the data label for a tense word (_PAST_, _PRESENT_, _FUTURE_ [tenses]).
     Data label is used to determine which tense to search
     :param type: Data label. String
-    :return: On Success: String that is used in the _detect_sentence_tense() function to determine which tense to search for.
+    :return: On Success: String that is used in the _detect_sentence_tense() function to determine which tense to search.
     On Failure: None
     """
     if '_PAST_' in type:
@@ -387,6 +388,7 @@ def detect_sentence(sentences, type, modal = False, nonmodal = False, use_data_l
                 sentence_count += 1
                 sentence_list.append(sentence)
         return (sentence_count, sentence_list)
+        #TODO: why is this here?
         return False
 
     #nonmodal past/present sentences
@@ -478,7 +480,8 @@ def cosine_sim(text1, text2):
 def jaccard_sim(text1,text2):
     #Unlike Edit Distance, you cannot just run Jaccard Distance on the strings directly; you must first convert them to the set type.
     #to run jaccard, the inputs MUST be sets -- remember the math behind jaccard distances
-    jaccard = nltk.jaccard_distance(set(text1), set(text2))
+    jaccard = nltk.jaccard_distance(set(text1.split()), set(text2.split()))
+    a = 1
     return jaccard
 
 #TODO: Add ability to find complex sentence tenses. IE: past/present & modal
@@ -692,7 +695,8 @@ class branching(object):
         else:
             return '-99'
 
-
+#def skip_lines(file):
+    
 
 
 

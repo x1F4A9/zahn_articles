@@ -1,4 +1,4 @@
-#requires main function Link_To_Closest_News_Article.py
+#requires main function Construct_Simscore.py
 from collections import OrderedDict
 from data_labels import label_headers
 
@@ -20,8 +20,8 @@ def _construct_fieldnames(filename, ordered_keys = [], sep = "_", items_to_match
     else:
         values = filename
     if items_to_match:
-        values = values[0:items_to_match-1]
-        ordered_keys = ordered_keys[0:items_to_match-1]
+        values = values[0:items_to_match]
+        ordered_keys = ordered_keys[0:items_to_match]
     if len (values) == len(ordered_keys):
         return dict(zip(ordered_keys, values))
     else:
@@ -52,13 +52,19 @@ def public_doc_count_check(doc_count, value, exact_value = True):
 
 def remove_tables(soup_text, max_percent_numbes_in_tables):
     for table in soup_text.findAll('table'):
-        count_number = 0
+        numeric_characters = 0
+        characters = 0
         text = table.get_text().strip()
         for character in text:
-            if character.isnumeric():
-                count_number += 1
+            if character.isspace():
+                continue
+            elif character.isnumeric():
+                numeric_characters += 1
+                characters += 1
+            else:
+                characters += 1
         try:
-            if count_number / len(text) > max_percent_numbes_in_tables:
+            if numeric_characters/characters > max_percent_numbes_in_tables:
                 table.decompose()
         except ZeroDivisionError:
             pass

@@ -1,4 +1,4 @@
-from Library.parser import ParseRtf, IdentifyFilename
+from Library.Article_Parser import ParseRtf, IdentifyFilename
 import os
 from tqdm import tqdm
 from collections import defaultdict
@@ -7,8 +7,8 @@ identified_companies_csv = os.path.join('/media/abc-123/EDGAR/Zahn/Export', 'all
 identify_filenames = IdentifyFilename(identified_companies_csv)
 
 main_path = os.path.join('/media/abc-123/EDGAR/Zahn/Export', 'Articles')
-output_path = os.path.join('/media/abc-123/EDGAR/Zahn/', 'Output_3')
-os.makedirs(os.path.join('/media/abc-123/EDGAR/Zahn/', 'Output_3'), exist_ok=True)
+output_path = os.path.join('/media/abc-123/EDGAR/Zahn/', 'News_Article_Output')
+os.makedirs(os.path.join('/media/abc-123/EDGAR/Zahn/', 'News_Article_Output'), exist_ok=True)
 files = os.listdir(main_path)
 rtf_parser = ParseRtf(output_path)
 

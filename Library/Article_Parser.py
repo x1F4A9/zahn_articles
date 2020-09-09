@@ -62,7 +62,7 @@ class ParseRtf(object):
         """
         #identify all dates in factset date format
         self.dates = re.compile(r"([0-9]{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December) (20[0-9]{2})")
-        self.times = re.compile(r"([0-9]{2}):([0-9]{2})(?::[0-9]{2})?")
+        self.times = re.compile(r"([0-9]{1,2}):([0-9]{2})(?::[0-9]{2})?")
         self.times_single_digit = re.compile(r"([0-9]{1,2}):([0-9]{2})(?::[0-9]{2})?")
         self.output_directory = os.path.join(output_directory)
         self.files_output = defaultdict(int)
@@ -71,7 +71,7 @@ class ParseRtf(object):
     def parse(self, rtf_text, filename, file = None):
         """
         Main entry point for class.
-        Outputs file to location specified during the construction of the parse_rtf objet
+        Outputs file to location specified during the construction of the parse_rtf object
         :param rtf_text: Text snippet
         :param filename: Base output filename of combined factset articles in rtf document
         :return: None -- Outputs to file

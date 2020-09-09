@@ -27,8 +27,9 @@ from bs4 import BeautifulSoup
 # mpl.setLevel(logging.DEBUG)
 
 #pickle variables -- saves processing
-edgar_8k_pickle = True
-news_article_pickle = True
+#set to false to rebuild file list
+edgar_8k_pickle = False
+news_article_pickle = False
 
 #local imports
 import data_labels
@@ -62,15 +63,31 @@ with open('/media/abc-123/EDGAR/ALL_8K_HEADER_INFO_2002_2019_RO.csv', 'r', error
 print('8k headers')
 #main multiprocessing function --
 
+def save_file(path, filename, file_content):
+    with open(os.path.join(path, filename), 'w', errors='ignore') as f:
+        f.write(file_content)
+
+def make_directory(root_dir):
+    directory_counter = 1
+    if os.path.exists(os.path.join(root_dir, str(directory_counter))):
+        directory_counter += 1
+    else:
+        os.mkdir(os.path.join(root_dir, str(directory_counter)))
+
+
 def find_articles(article_filename):
     #print('spawned')
     #place fieldnames here instead of global. Multiprocessing functions can only take one input and return one output
     #no point refactoring to make a dictionary as this function is a one-off-- just change the variable names here
+    #TODO: MAKE A GOD DAMN LABELING METHOD. MANUAL LABELING INSIDE THE MAIN METHOD IS CANCER. THIS POOR CODING COST COUNTLESS HOURS
+    #TODO: REMEMBER DRY, REMEMBER THE RULE OF ONE -- FUNCIONS TAKE ONE INPUT, DO ONE THING, RETURN ONE OUTPUT
+    #TODO: BREAK APART THIS MAIN FUNCION
+    #ThIs Is CaNcEr
     article_filename_keys = ['YEAR',
                             'NEWS_ARTICLE_FILENAME',
                             'EDGAR_ARTICLE_KEY',
-                            'NEWS_ARTICLE_TIMESTAMP',
-                            'EDGAR_EXHIBIT_TIMESTAMP',
+                            'ARTICLE_TIMESTAMP',
+                            'EXHIBIT_TIMESTAMP',
                             'TIMESTAMP_DISTANCE',
                             'EDGAR_YEAR']
     news_article_keys = ['COMPANY_NAME_NEWS_FILENAME',
@@ -80,6 +97,7 @@ def find_articles(article_filename):
                                          'TICKER',
                                          'NEWS_ARTICLE_DATE_1',
                                            ]
+    #TODO: Make a method that creates custom labels
     edgar_header_keys = [
                         'ACCESSION NUMBER',
                         'ACCEPTANCE-DATETIME',
@@ -108,6 +126,7 @@ def find_articles(article_filename):
     article_filename = article_filename_fields['NEWS_ARTICLE_FILENAME']
     final_data_dictionary = []
     with open(news_article_location, 'r', errors='ignore') as news_article:
+        #why am i not passing these files as arguments
         news_article_text = news_article.read()
         edgar_8k_identfier_key = article_filename_fields['EDGAR_ARTICLE_KEY']
         #only want those 8-Ks with a cover sheet and the earnings press release
@@ -118,7 +137,9 @@ def find_articles(article_filename):
         edgar_article_match = parsed_edgar_files_dict[year].get(edgar_8k_identfier_key, None)
         if edgar_article_match:
             for edgar_article_candidate in edgar_article_match:
-                edgar_article_fields = edgar_article_candidate[0].split(sep='<>')
+                #TODO: improve the indexing names. A huge bug existed because I used numeric indexing
+                #TODO: Find a way to make labeled indexing or find a better way to organize the data. Dont use the filename
+                edgar_article_fields = edgar_article_candidate[1].split(sep='<>')
                 edgar_article_location = os.path.join(parsed_edgar_files_root_dir + edgar_article_candidate[1])
                 #edgar article filename
                 edgar_filename = edgar_article_candidate[0]
@@ -129,29 +150,32 @@ def find_articles(article_filename):
                     #     continue
                     observation_data_dictionary = return_blank_ordered_dictionary()
                     observation_data_dictionary['INTERNAL_EXHIBIT_FILENAME'] = edgar_article_candidate[0]
-                    observation_data_dictionary['INTERNAL_ARTICLE_FILENAME'] = article_filename[1]
+                    observation_data_dictionary['INTERNAL_ARTICLE_FILENAME'] = article_filename
 
                     #wsj -- refactor this
                     news_article.seek(0)
                     news_article_first_10_lines = [next(news_article) for i in range(10)]
                     news_article_first_10_lines = ' '.join(news_article_first_10_lines)
+                    if re.search('((?:press|immediate|news|media) release|contact[ˆe]+?)', news_article_text, re.I):
+                        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 1
+                    else:
+                        #continue
+                        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 0
                     if re.search('(?<!of the)(?:\swall street journal)|(?:\swsj\s)',news_article_first_10_lines,re.I):
                         observation_data_dictionary['WSJ_ARTICLE'] = 1
                     else:
                         observation_data_dictionary['WSJ_ARTICLE'] = 0
-                    if re.search('((?:press|immediate|news|media) release|contact[ˆe]+?)', news_article_text, re.I):
-                        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 1
-                    else:
-                        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 0
+
                     news_article_fields = _construct_fieldnames(article_filename_fields['NEWS_ARTICLE_FILENAME'], ordered_keys=news_article_keys, items_to_match=5)
                     #identifying_fieldnames = article[1].split('_')
                     #
                     edgar_article_text = edgar_article.read()
                     soup = BeautifulSoup(edgar_article_text, "lxml")
+                    soup2 = soup.get_text()
                     #keep some tables -- they will be removed by the sentence parser if its pure numbers
                     #some filers put their entire presentation in tabular format
                     #TODO: PREPROCESS BEAUTIFULSOUP
-                    soup = remove_tables(soup, .8)
+                    soup = remove_tables(soup, .15)
                     edgar_article_text = soup.get_text()
 
                     #post processing -- guest 2018 -- remove short lines
@@ -171,7 +195,7 @@ def find_articles(article_filename):
                     news_article_sentences = parse_sentences(news_article_text)
 
                     #save files
-                    save_raw_text_files(save_location, (edgar_filename, edgar_article_text), (article_filename, news_article_text))
+                    #save_raw_text_files(save_location, (edgar_filename, edgar_article_text), (article_filename, news_article_text))
 
                     edgar_branching_obj = branching()
                     news_branching_obj = branching()
@@ -179,6 +203,10 @@ def find_articles(article_filename):
                     observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, article_filename_fields, ordered_keys=article_filename_keys)
                     observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, news_article_fields, ordered_keys=news_article_keys)
                     observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, all_8k_headers[edgar_8k_identfier_key], ordered_keys=edgar_header_keys)
+                    #TODO: make this part of the labeling method. This is extermely cumbersome
+                    observation_data_dictionary['EXHIBIT FILENAME'] = edgar_article_fields[1]
+                    observation_data_dictionary['EXHIBIT NAME'] = edgar_article_fields[1]
+                    qwerty = 1
                     for label in data_labels.label_headers:
                         if 'SIMSCORE_' in label:
                             a = simscore_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
@@ -458,8 +486,9 @@ def mp_handler():
             #much better way when compared with
             write_headers = True
             #for header_data in pool.imap(find_articles, tqdm(articles_to_compare),8):
-            #mp.cpu_count()-2
-            with futures.ProcessPoolExecutor(max_workers = mp.cpu_count()-2) as executor:
+            cpu = mp.cpu_count()-1
+            cpu_1 = 1
+            with futures.ProcessPoolExecutor(max_workers = cpu_1) as executor:
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
                 #need to iterate the list to submit!
                 running = {executor.submit(find_articles, article): article for article in tqdm(news_articles_to_compare_with_edgar_8k)}

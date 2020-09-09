@@ -22,11 +22,11 @@ if __name__ == '__main__':
         try:
             if 'Results' in header_dict.get(accession_number).get('ITEM INFORMATION'):
                 with open(filename, 'r', errors='ignore') as g:
-                    parser.output_location = os.path.join('/home/abc-123/EDGAR/8K_Output_2/', header_dict[accession_number]['FILING YEAR'])
+                    parser.output_location = os.path.join('/media/abc-123/EDGAR/8K_Output/', header_dict[accession_number]['FILING YEAR'])
                     g.seek(0)
                     parser.new_document(g.read())
                     parser.save_documents('99', ('ex99', 'EX99', 'ex-99', 'EX-99', '99_1', '991',),
-                                          filename=header_dict[accession_number]['ACCESSION NUMBER'], expanded_search=True)
+                                          filename=header_dict[accession_number]['ACCESSION NUMBER'], expanded_search=True,  search_string = '((?:press|immediate|news|media) release|contact[ˆe]+?)')
         except AttributeError:
             return
 

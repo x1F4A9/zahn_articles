@@ -69,7 +69,6 @@ label_headers = [
         'STANDARD INDUSTRIAL CLASSIFICATION',
         'STATE',
         'STATE OF INCORPORATION',
-        'EDGAR_TOTAL_SENTENCE_COUNT',
         'NEWS_ARTICLE_POSITIVE_WORDS',
         'NEWS_ARTICLE_NEGATIVE_WORDS',
         'NEWS_ARTICLE_OTHER_WORDS',
@@ -82,6 +81,8 @@ label_headers = [
         'EDGAR_FOG',
         'WSJ_ARTICLE',
         'ARTICLE_MENTIONS_EA',
+        'EDGAR_TOTAL_SENTENCE_COUNT',
+        'NEWS_ARTICLE_TOTAL_SENTENCE_COUNT',
 ]
 
 label_headers = label_headers + construct_labels('NEWS_ARTICLE','SENTENCE_COUNT', config.tense_labels,
