@@ -2,6 +2,7 @@ from Library.Article_Parser import ParseRtf, IdentifyFilename
 import os
 from tqdm import tqdm
 from collections import defaultdict
+import re
 
 identified_companies_csv = os.path.join('/media/abc-123/EDGAR/Zahn/Export', 'all.csv')
 identify_filenames = IdentifyFilename(identified_companies_csv)
@@ -26,6 +27,8 @@ for file in tqdm(files):
         for line in f:
             if rtf_parser.remove_images(line):
                 text.append(line)
+                #old search string
+                # , search_string=re.compile(r"quarter"))
         rtf_parser.parse_list(text, filename, file=file)
 
 files_not_output_t = {}

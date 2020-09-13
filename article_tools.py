@@ -22,7 +22,7 @@ def _construct_fieldnames(filename, ordered_keys = [], sep = "_", items_to_match
     if items_to_match:
         values = values[0:items_to_match]
         ordered_keys = ordered_keys[0:items_to_match]
-    if len (values) == len(ordered_keys):
+    if len(values) == len(ordered_keys):
         return dict(zip(ordered_keys, values))
     else:
         raise LengthError(values, ordered_keys)

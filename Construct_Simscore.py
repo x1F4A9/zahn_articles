@@ -28,8 +28,8 @@ from bs4 import BeautifulSoup
 
 #pickle variables -- saves processing
 #set to false to rebuild file list
-edgar_8k_pickle = False
-news_article_pickle = False
+edgar_8k_pickle = True
+news_article_pickle = True
 
 #local imports
 import data_labels
@@ -38,6 +38,11 @@ import config
 from article_tools import *
 ##############################
 from linguistic_tools import branching, parse_sentences
+
+#Directories of source files
+parsed_edgar_files_root_dir = '/media/abc-123/M2/8K_Output'
+articles_root = os.path.join('/media/abc-123/EDGAR/Zahn/News_Article_Output')
+#articles_root = os.path.join('/media/abc-123/EDGAR/Zahn/Output_2')
 
 class ViviDict(dict):
     def __missing__(self, key):
@@ -83,41 +88,8 @@ def find_articles(article_filename):
     #TODO: REMEMBER DRY, REMEMBER THE RULE OF ONE -- FUNCIONS TAKE ONE INPUT, DO ONE THING, RETURN ONE OUTPUT
     #TODO: BREAK APART THIS MAIN FUNCION
     #ThIs Is CaNcEr
-    article_filename_keys = ['YEAR',
-                            'NEWS_ARTICLE_FILENAME',
-                            'EDGAR_ARTICLE_KEY',
-                            'ARTICLE_TIMESTAMP',
-                            'EXHIBIT_TIMESTAMP',
-                            'TIMESTAMP_DISTANCE',
-                            'EDGAR_YEAR']
-    news_article_keys = ['COMPANY_NAME_NEWS_FILENAME',
-                                         'GVKEY',
-                                         'FDS',
-                                         'CUSIP',
-                                         'TICKER',
-                                         'NEWS_ARTICLE_DATE_1',
-                                           ]
-    #TODO: Make a method that creates custom labels
-    edgar_header_keys = [
-                        'ACCESSION NUMBER',
-                        'ACCEPTANCE-DATETIME',
-                        'CENTRAL INDEX KEY',
-                        'CITY',
-                        'COMPANY CONFORMED NAME',
-                        'CONFORMED PERIOD OF REPORT',
-                        'CONFORMED SUBMISSION TYPE',
-                        'EXHIBIT NAME',
-                        'FILED AS OF DATE',
-                        'FILENAME',
-                        'FILING YEAR',
-                        'FISCAL YEAR END',
-                        'ITEM INFORMATION',
-                        'LINK',
-                        'PUBLIC DOCUMENT COUNT',
-                        'STANDARD INDUSTRIAL CLASSIFICATION',
-                        'STATE',
-                        'STATE OF INCORPORATION',]
-    article_filename_fields = _construct_fieldnames(article_filename, ordered_keys=article_filename_keys, sep=None)
+
+    article_filename_fields = _construct_fieldnames(article_filename, ordered_keys=data_labels.article_filename_keys, sep=None)
     year = article_filename_fields['YEAR']
     news_article_location = os.path.join(articles_root, article_filename_fields['NEWS_ARTICLE_FILENAME'])
     #news article filename
@@ -127,7 +99,7 @@ def find_articles(article_filename):
     final_data_dictionary = []
     with open(news_article_location, 'r', errors='ignore') as news_article:
         #why am i not passing these files as arguments
-        news_article_text = news_article.read()
+        #news_article_text = news_article.read()
         edgar_8k_identfier_key = article_filename_fields['EDGAR_ARTICLE_KEY']
         #only want those 8-Ks with a cover sheet and the earnings press release
         #if public_doc_count_check(all_8k_headers[edgar_article_key]['PUBLIC DOCUMENT COUNT'], 2):
@@ -152,26 +124,26 @@ def find_articles(article_filename):
                     observation_data_dictionary['INTERNAL_EXHIBIT_FILENAME'] = edgar_article_candidate[0]
                     observation_data_dictionary['INTERNAL_ARTICLE_FILENAME'] = article_filename
 
-                    #wsj -- refactor this
-                    news_article.seek(0)
-                    news_article_first_10_lines = [next(news_article) for i in range(10)]
-                    news_article_first_10_lines = ' '.join(news_article_first_10_lines)
-                    if re.search('((?:press|immediate|news|media) release|contact[ˆe]+?)', news_article_text, re.I):
-                        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 1
-                    else:
-                        #continue
-                        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 0
-                    if re.search('(?<!of the)(?:\swall street journal)|(?:\swsj\s)',news_article_first_10_lines,re.I):
-                        observation_data_dictionary['WSJ_ARTICLE'] = 1
-                    else:
-                        observation_data_dictionary['WSJ_ARTICLE'] = 0
+                    #wsj article text search
+                    news_article_first_15_lines = wsj_article_text(news_article)
 
-                    news_article_fields = _construct_fieldnames(article_filename_fields['NEWS_ARTICLE_FILENAME'], ordered_keys=news_article_keys, items_to_match=5)
+                    #load lines after copyright into news article text variable
+                    news_article_text = find_copyright_field(news_article)
+
+                    if news_article_text == []:
+                        news_article_text = ' '
+
+                    search_earnings_announcement(news_article_text, observation_data_dictionary)
+
+                    search_quarter_text(news_article_text, observation_data_dictionary)
+
+                    search_wsj_text(news_article_first_15_lines, observation_data_dictionary)
+
+                    news_article_fields = _construct_fieldnames(article_filename_fields['NEWS_ARTICLE_FILENAME'], ordered_keys=data_labels.news_article_keys, items_to_match=5)
                     #identifying_fieldnames = article[1].split('_')
                     #
                     edgar_article_text = edgar_article.read()
                     soup = BeautifulSoup(edgar_article_text, "lxml")
-                    soup2 = soup.get_text()
                     #keep some tables -- they will be removed by the sentence parser if its pure numbers
                     #some filers put their entire presentation in tabular format
                     #TODO: PREPROCESS BEAUTIFULSOUP
@@ -200,35 +172,95 @@ def find_articles(article_filename):
                     edgar_branching_obj = branching()
                     news_branching_obj = branching()
                     simscore_branching_obj = branching()
-                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, article_filename_fields, ordered_keys=article_filename_keys)
-                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, news_article_fields, ordered_keys=news_article_keys)
-                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, all_8k_headers[edgar_8k_identfier_key], ordered_keys=edgar_header_keys)
+                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, article_filename_fields, ordered_keys=data_labels.article_filename_keys)
+                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, news_article_fields, ordered_keys=data_labels.news_article_keys)
+                    observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, all_8k_headers[edgar_8k_identfier_key], ordered_keys=data_labels.edgar_header_keys)
                     #TODO: make this part of the labeling method. This is extermely cumbersome
-                    observation_data_dictionary['EXHIBIT FILENAME'] = edgar_article_fields[1]
-                    observation_data_dictionary['EXHIBIT NAME'] = edgar_article_fields[1]
+                    observation_data_dictionary['EXHIBIT_FILENAME'] = edgar_article_fields[1]
+                    observation_data_dictionary['EXHIBIT_NAME'] = edgar_article_fields[2]
                     qwerty = 1
-                    for label in data_labels.label_headers:
-                        if 'SIMSCORE_' in label:
-                            a = simscore_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
-                            if a or a == 0:
-                                observation_data_dictionary[label] = a
-                            else:
-                                observation_data_dictionary[label] = '-99'
-                        elif 'EDGAR' in label:
-                            a = edgar_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences, edgar_article_sentences)
-                            if a or a == 0:
-                                observation_data_dictionary[label] = a
-                            else:
-                                observation_data_dictionary[label] = '-99'
-                        elif 'NEWS_ARTICLE' in label:
-                            a = news_branching_obj.brancher(label, news_article_text, edgar_article_text,
-                                                             news_article_sentences, edgar_article_sentences)
-                            if a or a == 0:
-                                observation_data_dictionary[label] = a
-                            else:
-                                observation_data_dictionary[label] = '-99'
+                    construct_output_labels(edgar_article_sentences, edgar_article_text, edgar_branching_obj,
+                                            news_article_sentences, news_article_text, news_branching_obj,
+                                            observation_data_dictionary, simscore_branching_obj)
+                    #why are labels mismatched
+                    if observation_data_dictionary['ARTICLE_MENTIONS_QUARTER'] != 0:
+                        if observation_data_dictionary['ARTICLE_MENTIONS_QUARTER'] != 1:
+                            print('uhoh')
+
                     final_data_dictionary.append(observation_data_dictionary)
     return (True, final_data_dictionary)
+
+
+def wsj_article_text(news_article):
+    news_article.seek(0)
+    try:
+        news_article_first_15_lines = [next(news_article) for i in range(15)]
+    except(StopIteration):
+        news_article_first_15_lines = news_article.readlines()
+    news_article_first_15_lines = ' '.join(news_article_first_15_lines)
+    return news_article_first_15_lines
+
+
+def construct_output_labels(edgar_article_sentences, edgar_article_text, edgar_branching_obj, news_article_sentences,
+                            news_article_text, news_branching_obj, observation_data_dictionary, simscore_branching_obj):
+    for label in data_labels.label_headers:
+        if 'SIMSCORE_' in label:
+            a = simscore_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences,
+                                                edgar_article_sentences)
+            if a or a == 0:
+                observation_data_dictionary[label] = a
+            else:
+                observation_data_dictionary[label] = '-99'
+        elif 'EDGAR' in label:
+            a = edgar_branching_obj.brancher(label, news_article_text, edgar_article_text, news_article_sentences,
+                                             edgar_article_sentences)
+            if a or a == 0:
+                observation_data_dictionary[label] = a
+            else:
+                observation_data_dictionary[label] = '-99'
+        elif 'NEWS_ARTICLE' in label:
+            a = news_branching_obj.brancher(label, news_article_text, edgar_article_text,
+                                            news_article_sentences, edgar_article_sentences)
+            if a or a == 0:
+                observation_data_dictionary[label] = a
+            else:
+                observation_data_dictionary[label] = '-99'
+
+
+def search_wsj_text(news_article_first_15_lines, observation_data_dictionary):
+    if re.search('(?<!of the)(?:\swall street journal)|(?:\swsj\s)', news_article_first_15_lines, re.I):
+        observation_data_dictionary['WSJ_ARTICLE'] = 1
+    else:
+        observation_data_dictionary['WSJ_ARTICLE'] = 0
+
+
+def search_quarter_text(news_article_text, observation_data_dictionary):
+    if re.search('(?:quarter)', news_article_text, re.I):
+        observation_data_dictionary['ARTICLE_MENTIONS_QUARTER'] = 1
+    else:
+        observation_data_dictionary['ARTICLE_MENTIONS_QUARTER'] = 0
+
+
+def search_earnings_announcement(news_article_text, observation_data_dictionary):
+    if re.search('((?:press|immediate|news|media) release|contact[ˆe]+?)', news_article_text, re.I):
+        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 1
+    else:
+        # continue
+        observation_data_dictionary['ARTICLE_MENTIONS_EA'] = 0
+
+
+def find_copyright_field(news_article):
+    news_article.seek(0)
+    news_article_text = []
+    for news_article_line in news_article:
+        if '(c)' in news_article_line.rstrip() or 'Copyright' in news_article_line.rstrip():
+            try:
+                while True:
+                    news_article_line = next(news_article)
+                    news_article_text.append(news_article_line)
+            except(StopIteration):
+                news_article_text = ' '.join(news_article_text)
+    return news_article_text
 
 
 #overall structure
@@ -253,8 +285,7 @@ def find_articles(article_filename):
 
 
 #create articles list
-articles_root = os.path.join('/media/abc-123/M2/Zahn/Output_2')
-#articles_root = os.path.join('/media/abc-123/EDGAR/Zahn/Output_2')
+
 
 articles = os.listdir(articles_root)
 
@@ -369,7 +400,7 @@ else:
 #4) report both results
 
 parsed_edgar_files_dict = {}
-parsed_edgar_files_root_dir = '/media/abc-123/M2/8K_Output'
+
 #parsed_articles_root_dir = '/media/abc-123/EDGAR/8K_Output'
 if edgar_8k_pickle:
     parsed_edgar_files_dict = pickle.load(open('parsed_edgar_articles_dict.pickle', 'rb'))
@@ -488,7 +519,7 @@ def mp_handler():
             #for header_data in pool.imap(find_articles, tqdm(articles_to_compare),8):
             cpu = mp.cpu_count()-1
             cpu_1 = 1
-            with futures.ProcessPoolExecutor(max_workers = cpu_1) as executor:
+            with futures.ProcessPoolExecutor(max_workers = cpu) as executor:
                 # if header_data returns a false value (ie, the vale does not conform to our expectations: ignore the value
                 #need to iterate the list to submit!
                 running = {executor.submit(find_articles, article): article for article in tqdm(news_articles_to_compare_with_edgar_8k)}

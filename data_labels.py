@@ -27,6 +27,7 @@ def _construct_labels(prefix, suffix, combination, *args):
     return _create_text_labels(prefix, suffix, valid_args)
     #["{}_{}_{}".format(prefix, i, suffix)]
 
+
 def construct_labels(prefix, suffix, *args):
     list_combinations = []
     labels_return = []
@@ -37,53 +38,92 @@ def construct_labels(prefix, suffix, *args):
         labels_return += _construct_labels(prefix, suffix, combination, args)
     return labels_return
 
+
 label_headers = [
-        'ACCESSION NUMBER',
-        'GVKEY',
-        'FDS',
-        'CUSIP',
-        'TICKER',
-        'ARTICLE_FILENAME',
-        'EXHIBIT_FILENAME',
-        'SIMSCORE_COSINE',
-        'SIMSCORE_JACCARD',
-        'EXHIBIT NAME',
-        'INTERNAL_ARTICLE_FILENAME',
-        'INTERNAL_EXHIBIT_FILENAME',
-        'ARTICLE_TIMESTAMP',
-        'EXHIBIT_TIMESTAMP',
-        'TIMESTAMP_DISTANCE',
-        'ACCEPTANCE-DATETIME',
-        'CENTRAL INDEX KEY',
-        'CITY',
-        'COMPANY CONFORMED NAME',
-        'CONFORMED PERIOD OF REPORT',
-        'CONFORMED SUBMISSION TYPE',
-        'FILED AS OF DATE',
-        'FILENAME',
-        'FILING YEAR',
-        'FISCAL YEAR END',
-        'ITEM INFORMATION',
-        'LINK',
-        'PUBLIC DOCUMENT COUNT',
-        'STANDARD INDUSTRIAL CLASSIFICATION',
-        'STATE',
-        'STATE OF INCORPORATION',
-        'NEWS_ARTICLE_POSITIVE_WORDS',
-        'NEWS_ARTICLE_NEGATIVE_WORDS',
-        'NEWS_ARTICLE_OTHER_WORDS',
-        'NEWS_ARTICLE_TOTAL_WORDS',
-        'NEWS_ARTICLE_FOG',
-        'EDGAR_POSITIVE_WORDS',
-        'EDGAR_NEGATIVE_WORDS',
-        'EDGAR_OTHER_WORDS',
-        'EDGAR_TOTAL_WORDS',
-        'EDGAR_FOG',
-        'WSJ_ARTICLE',
-        'ARTICLE_MENTIONS_EA',
-        'EDGAR_TOTAL_SENTENCE_COUNT',
-        'NEWS_ARTICLE_TOTAL_SENTENCE_COUNT',
-]
+    'ACCESSION NUMBER',
+    'GVKEY',
+    'FDS',
+    'CUSIP',
+    'TICKER',
+    'ARTICLE_FILENAME',
+    'EXHIBIT_FILENAME',
+    'SIMSCORE_COSINE',
+    'SIMSCORE_JACCARD',
+    'EXHIBIT_NAME',
+    'INTERNAL_ARTICLE_FILENAME',
+    'INTERNAL_EXHIBIT_FILENAME',
+    'ARTICLE_TIMESTAMP',
+    'EXHIBIT_TIMESTAMP',
+    'TIMESTAMP_DISTANCE',
+    'ACCEPTANCE-DATETIME',
+    'CENTRAL INDEX KEY',
+    'CITY',
+    'COMPANY CONFORMED NAME',
+    'CONFORMED PERIOD OF REPORT',
+    'CONFORMED SUBMISSION TYPE',
+    'FILED AS OF DATE',
+    'FILENAME',
+    'FILING YEAR',
+    'FISCAL YEAR END',
+    'ITEM INFORMATION',
+    'LINK',
+    'PUBLIC DOCUMENT COUNT',
+    'STANDARD INDUSTRIAL CLASSIFICATION',
+    'STATE',
+    'STATE OF INCORPORATION',
+    'NEWS_ARTICLE_POSITIVE_WORDS',
+    'NEWS_ARTICLE_NEGATIVE_WORDS',
+    'NEWS_ARTICLE_OTHER_WORDS',
+    'NEWS_ARTICLE_TOTAL_WORDS',
+    'NEWS_ARTICLE_FOG',
+    'EDGAR_POSITIVE_WORDS',
+    'EDGAR_NEGATIVE_WORDS',
+    'EDGAR_OTHER_WORDS',
+    'EDGAR_TOTAL_WORDS',
+    'EDGAR_FOG',
+    'WSJ_ARTICLE',
+    'ARTICLE_MENTIONS_EA',
+    'ARTICLE_MENTIONS_QUARTER',
+    'EDGAR_TOTAL_SENTENCE_COUNT',
+    'NEWS_ARTICLE_TOTAL_SENTENCE_COUNT',]
+
+
+article_filename_keys = [
+    'YEAR',
+    'NEWS_ARTICLE_FILENAME',
+    'EDGAR_ARTICLE_KEY',
+    'ARTICLE_TIMESTAMP',
+    'EXHIBIT_TIMESTAMP',
+    'TIMESTAMP_DISTANCE',
+    'EDGAR_YEAR',]
+
+
+news_article_keys = [
+    'COMPANY_NAME_NEWS_FILENAME',
+    'GVKEY',
+    'FDS',
+    'CUSIP',
+    'TICKER',]
+
+
+edgar_header_keys = [
+    'ACCESSION NUMBER',
+    'ACCEPTANCE-DATETIME',
+    'CENTRAL INDEX KEY',
+    'CITY',
+    'COMPANY CONFORMED NAME',
+    'CONFORMED PERIOD OF REPORT',
+    'CONFORMED SUBMISSION TYPE',
+    'FILED AS OF DATE',
+    'FILENAME',
+    'FILING YEAR',
+    'FISCAL YEAR END',
+    'ITEM INFORMATION',
+    'LINK',
+    'PUBLIC DOCUMENT COUNT',
+    'STANDARD INDUSTRIAL CLASSIFICATION',
+    'STATE',
+    'STATE OF INCORPORATION', ]
 
 label_headers = label_headers + construct_labels('NEWS_ARTICLE','SENTENCE_COUNT', config.tense_labels,
                                                  config.tone_labels, config.forward_labels, config.earnings_labels,

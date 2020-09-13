@@ -4,16 +4,23 @@ import os
 from collections import defaultdict
 
 
-def output(text, filename, path):
+def write_file(text, filename, path, search_string=None):
     counter = 0
     if not os.path.isdir(path):
         os.mkdir(path)
     initial_filename = filename
-    while os.path.isfile(os.path.join(path, filename+'.txt')):
+    while os.path.isfile(os.path.join(path, filename + '.txt')):
         filename = '{}_{}'.format(initial_filename, str(counter))
         counter += 1
-    with open(os.path.join(path , filename+'.txt',), 'w', errors='ignore') as f:
-        f.write(text)
+    if search_string:
+        if search_string.search(text, re.I):
+            with open(os.path.join(path, filename + '.txt', ), 'w', errors='ignore') as f:
+                f.write(text)
+        else:
+            return
+    else:
+        with open(os.path.join(path, filename + '.txt', ), 'w', errors='ignore') as f:
+            f.write(text)
 
 
 class TestSuite(object):
@@ -42,6 +49,7 @@ class FdsDict(dict):
     creates an extend method to add identifying information for companies
     with multiple cusips
     """
+
     def extend(self, key, item):
         if self.get(key) == 0:
             self[key] = [item]
@@ -53,22 +61,23 @@ class FdsDict(dict):
 
 
 class ParseRtf(object):
-    def __init__(self, output_directory = None):
+    def __init__(self, output_directory=None):
         """
         Main parsing class.
         Takes a raw rtf text snippet and cleans out the rtf formatting to create a flat text file
         :param output_directory: Specify the output directory when constructing the object.
                                  Path should be constructed with os.path.join
         """
-        #identify all dates in factset date format
-        self.dates = re.compile(r"([0-9]{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December) (20[0-9]{2})")
+        # identify all dates in factset date format
+        self.dates = re.compile(
+            r"([0-9]{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December) (20[0-9]{2})")
         self.times = re.compile(r"([0-9]{1,2}):([0-9]{2})(?::[0-9]{2})?")
         self.times_single_digit = re.compile(r"([0-9]{1,2}):([0-9]{2})(?::[0-9]{2})?")
         self.output_directory = os.path.join(output_directory)
         self.files_output = defaultdict(int)
         self.cache = None
 
-    def parse(self, rtf_text, filename, file = None):
+    def parse(self, rtf_text, filename, file=None):
         """
         Main entry point for class.
         Outputs file to location specified during the construction of the parse_rtf object
@@ -80,17 +89,17 @@ class ParseRtf(object):
         date = self._find_date(parsed_text)
         time = self._find_time(parsed_text)
         if date is None:
-            #print('no date')
+            # print('no date')
             return
         else:
             try:
-                filename = filename+date+'_'+time
+                filename = filename + date + '_' + time
             except TypeError:
                 print('halt')
-            output(parsed_text, filename, self.output_directory)
+            write_file(parsed_text, filename, self.output_directory)
             self.files_output[file] += 1
 
-    def _parse_type_1_list(self, rtf_list, filename, file=None):
+    def _parse_type_1_list(self, rtf_list, filename, file=None, search_string=None):
         """
         Parses a document without images
         :param rtf_list: List of RTF text
@@ -100,12 +109,12 @@ class ParseRtf(object):
         """
         date = None
         time = None
-        #find the first date only
+        # find the first date only
         found_date = False
         found_time = False
         for line in rtf_list:
             parsed_text = self._remove_type_1_tags(self._clean_url_field(self._create_newlines(line)))
-            #find the article date in the line
+            # find the article date in the line
             date_t = self._find_date(parsed_text)
             time_t = self._find_time(parsed_text)
             if date_t and found_date == False:
@@ -114,29 +123,29 @@ class ParseRtf(object):
             if time_t and found_time == False:
                 found_time = True
                 time = time_t
-            #determine if we are at the end of the file, if not, store line in cache
-            #we should use the original line
+            # determine if we are at the end of the file, if not, store line in cache
+            # we should use the original line
             if self._end_of_type_1_document(line):
                 try:
                     filename_o = filename + date + '_' + time
                 except TypeError:
-                    #print('halt')
+                    # print('halt')
                     if time is None:
                         filename_o = filename + date + '_000000'
                 self.cache += (parsed_text)
                 try:
-                    output(self.cache, filename_o, self.output_directory)
+                    write_file(self.cache, filename_o, self.output_directory, search_string=search_string)
                 except UnboundLocalError:
                     print('uhoh')
                 self._clear_cache()
                 self.files_output[file] += 1
-                #update the datej flag
+                # update the datej flag
                 found_date = False
             else:
                 self._update_cache(parsed_text)
                 continue
 
-    def _parse_type_2_list(self, rtf_list, filename, file=None):
+    def _parse_type_2_list(self, rtf_list, filename, file=None, search_string=None):
         """
         Parses a document with images
         :param rtf_list: List of RTF text
@@ -162,19 +171,19 @@ class ParseRtf(object):
                     time_l = time
                     continue
                 try:
-                    filename_o = filename+date_l+'_'+time_l
+                    filename_o = filename + date_l + '_' + time_l
                 except TypeError:
                     if time_l is None:
                         filename_o = filename + date_l + '_000000'
-                    #print('halt')
-                output(self.cache, filename_o, self.output_directory)
+                    # print('halt')
+                write_file(self.cache, filename_o, self.output_directory, search_string=search_string)
                 date_l = date
                 time_l = time
                 self._clear_cache()
                 self.cache = parsed_text
                 self.files_output[file] += 1
 
-    def parse_list(self, rtf_list, filename, file=None):
+    def parse_list(self, rtf_list, filename, file=None, search_string=None):
         """
         Main entry point for class.
         Parses a RTF file that is in a list format
@@ -184,11 +193,11 @@ class ParseRtf(object):
         :param file: OPTIONAL -- filename of rtf document for diagnostics
         :return: None -- Outputs to file
         """
-        #determine document type:
+        # determine document type:
         if self._document_is_type_1(rtf_list):
-            self._parse_type_1_list(rtf_list, filename, file)
+            self._parse_type_1_list(rtf_list, filename, file, search_string=search_string)
         else:
-            self._parse_type_2_list(rtf_list, filename, file)
+            self._parse_type_2_list(rtf_list, filename, file, search_string=search_string)
 
     def _clear_cache(self):
         """
@@ -215,7 +224,7 @@ class ParseRtf(object):
         :return: STRING. Converts the date to YYYYMMDD format. That is, 1 January 2000 is converted to 20000101
         """
         date = self.dates.search(rtf_text)
-        #check if the text snippet is an image container
+        # check if the text snippet is an image container
         if date is None:
             return date
         month = self._convert_month(date.group(2))
@@ -232,7 +241,7 @@ class ParseRtf(object):
         :return: STRING -- Time in format HHMM
         """
         time = self.times.search(rtf_text)
-        #find time
+        # find time
         if time is None:
             return time
         if len(time.groups()) == 3:
@@ -240,13 +249,12 @@ class ParseRtf(object):
         else:
             if len(time.group(1)) == 1:
                 time = self.times_single_digit.search(rtf_text)
-                hour = '0'+time.group(1)
+                hour = '0' + time.group(1)
                 if len(time.groups()) == 3:
-                    return('{}{}{}'.format(hour, time.group(2), time.group(3)))
+                    return ('{}{}{}'.format(hour, time.group(2), time.group(3)))
                 else:
-                    return('{}{}{}'.format(hour, time.group(2), '00'))
+                    return ('{}{}{}'.format(hour, time.group(2), '00'))
             return '{}{}{}'.format(time.group(1), time.group(2), '00')
-
 
     @staticmethod
     def _document_is_type_1(text):
@@ -324,10 +332,10 @@ class ParseRtf(object):
         bold = re.compile(r"\\b[0-3]?")
         font = re.compile(r"\\fcharset0 .*?(?= |\\|;|\n);?")
         remainder = re.compile(r"\\.*?(?=\\| |;|\n);?")
-        rtf_text = headers.sub('',rtf_text)
-        rtf_text = bold.sub('',rtf_text)
-        rtf_text = font.sub('',rtf_text)
-        rtf_text = remainder.sub('',rtf_text)
+        rtf_text = headers.sub('', rtf_text)
+        rtf_text = bold.sub('', rtf_text)
+        rtf_text = font.sub('', rtf_text)
+        rtf_text = remainder.sub('', rtf_text)
         rtf_text = brackets.sub('', rtf_text)
         return rtf_text
 
@@ -338,7 +346,7 @@ class ParseRtf(object):
         :param rtf_text: identified rtf text
         :return: STRING. \par tags REPLACED with newline characters
         """
-        #regex to identify all par tags
+        # regex to identify all par tags
         re_par = re.compile(r"(\\par)(?=[ \\])", re.DOTALL)
         return re_par.sub(r"\n", rtf_text)
 
@@ -353,7 +361,7 @@ class ParseRtf(object):
         re_tag = re.compile(r"(\\.*?) ")
         re_tag_newline = re.compile(r"(\\.*?)(?=\n)")
         rtf_text = re_tag.sub(r"", rtf_text)
-        #there are stragglers because of the newlines. We need two regular expressions
+        # there are stragglers because of the newlines. We need two regular expressions
         return re_tag_newline.sub(r"", rtf_text)
 
     @staticmethod
@@ -363,7 +371,7 @@ class ParseRtf(object):
         :param rtf_text: identified rtf document
         :return: STRING. Returns the TEXT that is displayed on the document for the hyperlink
         """
-        #identify the hyperlink fields and extract the text
+        # identify the hyperlink fields and extract the text
         hyperlink_field = re.compile(r"{\\field.*?}{\\fldrslt{\\cf2 \\uc2(?: )*?(.*?)}+", re.DOTALL)
         return hyperlink_field.sub(r"\1", rtf_text)
 
@@ -399,16 +407,16 @@ class ParseRtf(object):
 class IdentifyFilename(object):
     def __init__(self, filenames_location):
         self.filename_dict = FdsDict()
-        with open(os.path.join(filenames_location),'r', errors = 'ignore') as f:
+        with open(os.path.join(filenames_location), 'r', errors='ignore') as f:
             csv_dict = csv.DictReader(f)
             for row in csv_dict:
                 self.filename_dict.extend(row['fds'],
-                    {'tic':row['tic'],
-                     'gvkey_chr':row['gvkey_chr'],
-                     'conm':row['conm'],
-                     'cusip':row['cusip'],
-                     }
-                )
+                                          {'tic': row['tic'],
+                                           'gvkey_chr': row['gvkey_chr'],
+                                           'conm': row['conm'],
+                                           'cusip': row['cusip'],
+                                           }
+                                          )
 
     def construct_output_filename(self, filename):
         filename = filename[0:-4]
@@ -423,7 +431,7 @@ class IdentifyFilename(object):
 
     @staticmethod
     def _sanitize_filename(filename):
-        return re.sub(r'[/\\]',r'',filename)
+        return re.sub(r'[/\\]', r'', filename)
 
     @staticmethod
     def _construct_return_dictionary(key, dictionary, second_key=None):
@@ -454,10 +462,3 @@ class IdentifyFilename(object):
                         )
                 except TypeError:
                     print('ERROR')
-
-
-
-
-
-
-
