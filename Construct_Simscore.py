@@ -137,7 +137,9 @@ def find_articles(article_filename):
 
                     search_quarter_text(news_article_text, observation_data_dictionary)
 
-                    search_wsj_text(news_article_first_15_lines, observation_data_dictionary)
+
+                    news_article_source_tuple = ((r'(?<!of the)(?:\swall street journal)|(?:\swsj\s)','WSJ_ARTICLE'), (r'reuters','REUTERS_ARTICLE'), (r'dow jones','DJI_ARTICLE'))
+                    search_news_article_source(news_article_first_15_lines, observation_data_dictionary, news_article_source_tuple)
 
                     news_article_fields = _construct_fieldnames(article_filename_fields['NEWS_ARTICLE_FILENAME'], ordered_keys=data_labels.news_article_keys, items_to_match=5)
                     #identifying_fieldnames = article[1].split('_')
@@ -172,6 +174,8 @@ def find_articles(article_filename):
                     edgar_branching_obj = branching()
                     news_branching_obj = branching()
                     simscore_branching_obj = branching()
+                    #TODO: ORGANIZE THIS INTO A CLEANER CLASS
+                    #all data labels occur here
                     observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, article_filename_fields, ordered_keys=data_labels.article_filename_keys)
                     observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, news_article_fields, ordered_keys=data_labels.news_article_keys)
                     observation_data_dictionary = _create_dictionary_from_dictionary(observation_data_dictionary, all_8k_headers[edgar_8k_identfier_key], ordered_keys=data_labels.edgar_header_keys)
@@ -186,11 +190,21 @@ def find_articles(article_filename):
                     if observation_data_dictionary['ARTICLE_MENTIONS_QUARTER'] != 0:
                         if observation_data_dictionary['ARTICLE_MENTIONS_QUARTER'] != 1:
                             print('uhoh')
+#final post processing
+                    observation_data_dictionary = postprocessing(observation_data_dictionary)
 
                     final_data_dictionary.append(observation_data_dictionary)
+
+
     return (True, final_data_dictionary)
 
-
+def postprocessing(final_dictionary_output):
+    #renaming to make typing easier
+    output = final_dictionary_output
+    #WSJ is copyrighted by DJI... confuses the simple code
+    if output['WSJ_ARTICLE'] == 1 and output['DJI_ARTICLE'] == 1:
+        output['DJI_ARTICLE'] = 0
+    return output
 def wsj_article_text(news_article):
     news_article.seek(0)
     try:
@@ -226,12 +240,14 @@ def construct_output_labels(edgar_article_sentences, edgar_article_text, edgar_b
             else:
                 observation_data_dictionary[label] = '-99'
 
-
-def search_wsj_text(news_article_first_15_lines, observation_data_dictionary):
-    if re.search('(?<!of the)(?:\swall street journal)|(?:\swsj\s)', news_article_first_15_lines, re.I):
-        observation_data_dictionary['WSJ_ARTICLE'] = 1
-    else:
-        observation_data_dictionary['WSJ_ARTICLE'] = 0
+#remember, zero -- one -- infinity principle. Never make a function that hard codes input!
+def search_news_article_source(news_article_first_15_lines, observation_data_dictionary, t_news_articles):
+    for search in t_news_articles:
+        search_text, is_search_text_news_article = search
+        if re.search(search_text, news_article_first_15_lines, re.I):
+            observation_data_dictionary[is_search_text_news_article] = 1
+        else:
+            observation_data_dictionary[is_search_text_news_article] = 0
 
 
 def search_quarter_text(news_article_text, observation_data_dictionary):

@@ -166,7 +166,7 @@ def _detect_sentence_tense(sentence, tense, modal = False, nonmodal = False):
             return True
         return False
 
-def determine_words(sentence_list, word_list):
+def count_words(sentence_list, word_list):
     """
     Determines if a word is in a word list
     Requires nltk get_words function
@@ -189,7 +189,7 @@ def regex_search(sentence, regex_searches=None):
 
 
 
-def word_list_search(sentence, wordlists=None):
+def wordlist_search(sentence: object, wordlists: object = None) -> object:
     wordlist_flag = True
     #construct a bad character translation table so we can QUICKLY and CORRECTLY identify words.
     bad_char = str.maketrans({'.':None, ',':None, '"':None, "'":None,'"':None, ';':None, ':':None})
@@ -209,6 +209,16 @@ def word_list_search(sentence, wordlists=None):
         return True
     return False
 
+# #TODO
+# #i need to make this a class
+# def word_difference(text, *wordlist):
+#     if len(wordlist) < 2:
+#         raise Exception("word_difference requires at least two wordlists")
+#     wordlist_flag = True
+#     #construct a bad character translation table so we can QUICKLY and CORRECTLY identify words.
+#     bad_char = str.maketrans({'.':None, ',':None, '"':None, "'":None,'"':None, ';':None, ':':None})
+
+
 
 def determine_sentences(sentence_list, **kwargs):
     """
@@ -226,7 +236,7 @@ def determine_sentences(sentence_list, **kwargs):
     for sentence in sentence_list:
         if wordlists:
             wordlist_flag = False
-            if word_list_search(sentence, wordlists=wordlists):
+            if wordlist_search(sentence, wordlists=wordlists):
                 wordlist_flag = True
         if regex:
             regex_flag = False
@@ -408,14 +418,17 @@ def detect_sentence(sentences, type, modal = False, nonmodal = False, use_data_l
             sentence_list.append(sentence)
     return (sentence_count, sentence_list)
 
+
+#TODO:
+#This needs to be a class
 def calculate_fog(sentences):
     return _calculate_fog(sentences)
 
 def count_positive_words(sentences):
-    return determine_words(sentences, positive_word_list)
+    return count_words(sentences, positive_word_list)
 
 def count_negative_words(sentences):
-    return determine_words(sentences, negative_word_list)
+    return count_words(sentences, negative_word_list)
 
 def count_words_in_document(sentences):
     return _count_words(sentences)
@@ -434,7 +447,7 @@ def count_numeric_sentences(sentences, *wordlists):
         for sentence in sentences:
             wordlist_flag = False
             numeric_flag = False
-            if word_list_search(sentence, wordlists=wordlists):
+            if wordlist_search(sentence, wordlists=wordlists):
                 wordlist_flag = True
             for word in get_words(sentence):
                 if any(ch.isdigit() for ch in word):
@@ -539,6 +552,7 @@ class branching(object):
             sentences = news_article_sentences
             text = news_article_text
         #document level measurements
+        #make this a better class -- you need more study
         if '_FOG' in label:
             return calculate_fog(sentences)
         elif '_TOTAL_WORDS' in label:
@@ -547,6 +561,12 @@ class branching(object):
             return count_negative_words(sentences)
         elif '_POSITIVE_WORDS' in label:
             return count_positive_words(sentences)
+        elif '_DOCUMENT_POS_WORDS' in label:
+            document = ' '.join(sentences)
+            return count_positive_words(document)
+        elif '_DOCUMENT_NEG_WORDS' in label:
+            document = ' ' .join(sentences)
+            return count_negative_words(document)
         #sentence level measurements
         #TODO: Refactor this
         elif '_SENTENCE_' in label:

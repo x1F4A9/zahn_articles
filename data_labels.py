@@ -38,7 +38,7 @@ def construct_labels(prefix, suffix, *args):
         labels_return += _construct_labels(prefix, suffix, combination, args)
     return labels_return
 
-
+#add additional headers here
 label_headers = [
     'ACCESSION NUMBER',
     'GVKEY',
@@ -75,13 +75,19 @@ label_headers = [
     'NEWS_ARTICLE_NEGATIVE_WORDS',
     'NEWS_ARTICLE_OTHER_WORDS',
     'NEWS_ARTICLE_TOTAL_WORDS',
+    'NEWS_ARTICLE_DOCUMENT_POS_WORDS',
+    'NEWS_ARTICLE_DOCUMENT_NEG_WORDS',
     'NEWS_ARTICLE_FOG',
     'EDGAR_POSITIVE_WORDS',
     'EDGAR_NEGATIVE_WORDS',
     'EDGAR_OTHER_WORDS',
     'EDGAR_TOTAL_WORDS',
+    'EDGAR_DOCUMENT_POS_WORDS',
+    'EDGAR_DOCUMENT_NEG_WORDS',
     'EDGAR_FOG',
     'WSJ_ARTICLE',
+    'REUTERS_ARTICLE',
+    'DJI_ARTICLE',
     'ARTICLE_MENTIONS_EA',
     'ARTICLE_MENTIONS_QUARTER',
     'EDGAR_TOTAL_SENTENCE_COUNT',
