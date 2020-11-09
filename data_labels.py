@@ -135,4 +135,8 @@ label_headers = label_headers + construct_labels('NEWS_ARTICLE','SENTENCE_COUNT'
                                                  config.tone_labels, config.forward_labels, config.earnings_labels,
                                                  config.numeric_labels, config.quantitative_labels)
 
+label_headers = label_headers + construct_labels('EDGAR', 'SENTENCE_COUNT', config.tense_labels,
+                                                 config.tone_labels, config.forward_labels, config.earnings_labels,
+                                                 config.numeric_labels, config.quantitative_labels)
+
 a = 1
